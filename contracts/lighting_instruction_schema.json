@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LightingInstruction",
+  "description": "Intent-level lighting instructions produced by the LLM decision engine.",
+  "type": "object",
+  "required": [
+    "scene_id",
+    "time_window",
+    "groups"
+  ],
+  "properties": {
+    "scene_id": {
+      "type": "string"
+    },
+    "time_window": {
+      "type": "object",
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "number" },
+        "end": { "type": "number" }
+      }
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["group_id", "parameters"],
+        "properties": {
+          "group_id": {
+            "type": "string",
+            "description": "Logical fixture group"
+          },
+          "parameters": {
+            "type": "object",
+            "required": ["intensity"],
+            "properties": {
+              "intensity": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "color": {
+                "type": "string",
+                "description": "Semantic color name (e.g. warm_amber)"
+              },
+              "focus_area": {
+                "type": ["string", "null"],
+                "description": "Abstract focus region (e.g. CENTER_STAGE)"
+              }
+            }
+          },
+          "transition": {
+            "type": ["object", "null"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["cut", "fade", "crossfade"]
+              },
+              "duration": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": ["object", "null"],
+      "description": "Optional non-executable metadata (logs, reasoning, debug info)"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LightingSemantics",
+  "description": "Design-oriented lighting tendencies based on context.",
+  "type": "object",
+  "required": [
+    "context_type",
+    "context_value",
+    "rules"
+  ],
+  "properties": {
+    "context_type": {
+      "type": "string",
+      "enum": ["emotion", "script_type", "scene_function", "event_phase"]
+    },
+    "context_value": {
+      "type": "string"
+    },
+    "rules": {
+      "type": "object",
+      "properties": {
+        "intensity": {
+          "type": "object",
+          "properties": {
+            "preferred_range": {
+              "type": "array",
+              "items": { "type": "number" },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        },
+        "color": {
+          "type": "object",
+          "properties": {
+            "palette": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "temperature": {
+              "type": "string",
+              "enum": ["warm", "neutral", "cool"]
+            }
+          }
+        },
+        "transition": {
+          "type": "object",
+          "properties": {
+            "preferred_types": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["cut", "fade", "crossfade"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "priority": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Relative importance when multiple semantics apply"
+    }
+  },
+  "additionalProperties": false
+}

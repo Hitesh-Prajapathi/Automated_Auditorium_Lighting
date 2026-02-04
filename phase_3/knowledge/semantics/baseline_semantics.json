@@ -1,0 +1,169 @@
+[
+    {
+        "_comment": "Base Rule: Formal academic events should be bright and neutral",
+        "context_type": "script_type",
+        "context_value": "formal_event",
+        "priority": 0.9,
+        "rules": {
+            "intensity": {
+                "preferred_range": [
+                    0.7,
+                    0.9
+                ]
+            },
+            "color": {
+                "temperature": "neutral"
+            },
+            "transitions": {
+                "preferred_types": [
+                    "fade",
+                    "cut"
+                ],
+                "speed": "medium"
+            }
+        }
+    },
+    {
+        "_comment": "Base Rule: Dramatic/Theatrical scenes generally allow more contrast",
+        "context_type": "script_type",
+        "context_value": "drama",
+        "priority": 0.5,
+        "rules": {
+            "intensity": {
+                "preferred_range": [
+                    0.0,
+                    1.0
+                ]
+            },
+            "transitions": {
+                "preferred_types": [
+                    "fade"
+                ],
+                "speed": "medium"
+            }
+        }
+    },
+    {
+        "_comment": "Emotion: Fear (Cold, low light, harsh)",
+        "context_type": "emotion",
+        "context_value": "fear",
+        "priority": 0.8,
+        "rules": {
+            "intensity": {
+                "preferred_range": [
+                    0.1,
+                    0.4
+                ]
+            },
+            "color": {
+                "temperature": "cool",
+                "palettes": [
+                    "dark_blue",
+                    "cold_white"
+                ]
+            },
+            "transitions": {
+                "speed": "slow"
+            }
+        }
+    },
+    {
+        "_comment": "Emotion: Joy (Bright, Warm, Colorful)",
+        "context_type": "emotion",
+        "context_value": "joy",
+        "priority": 0.8,
+        "rules": {
+            "intensity": {
+                "preferred_range": [
+                    0.6,
+                    1.0
+                ]
+            },
+            "color": {
+                "temperature": "warm",
+                "palettes": [
+                    "amber",
+                    "yellow",
+                    "pink"
+                ]
+            },
+            "transitions": {
+                "speed": "medium"
+            }
+        }
+    },
+    {
+        "_comment": "Emotion: Sadness (Dim, Isolated, Blue/Cool)",
+        "context_type": "emotion",
+        "context_value": "sadness",
+        "priority": 0.8,
+        "rules": {
+            "intensity": {
+                "preferred_range": [
+                    0.2,
+                    0.5
+                ]
+            },
+            "color": {
+                "temperature": "cool",
+                "palettes": [
+                    "blue",
+                    "purple"
+                ]
+            },
+            "transitions": {
+                "speed": "slow"
+            }
+        }
+    },
+    {
+        "_comment": "Emotion: Anger (High contrast, Red, Fast changes)",
+        "context_type": "emotion",
+        "context_value": "anger",
+        "priority": 0.8,
+        "rules": {
+            "intensity": {
+                "preferred_range": [
+                    0.5,
+                    1.0
+                ]
+            },
+            "color": {
+                "temperature": "warm",
+                "palettes": [
+                    "red",
+                    "orange"
+                ]
+            },
+            "transitions": {
+                "speed": "fast"
+            }
+        }
+    },
+    {
+        "_comment": "Scene Function: Transition (Darken stage to change set)",
+        "context_type": "scene_function",
+        "context_value": "transition",
+        "priority": 1.0,
+        "rules": {
+            "intensity": {
+                "preferred_range": [
+                    0.0,
+                    0.2
+                ]
+            },
+            "color": {
+                "palettes": [
+                    "blackout",
+                    "dark_blue"
+                ]
+            },
+            "transitions": {
+                "preferred_types": [
+                    "fade"
+                ],
+                "speed": "medium"
+            }
+        }
+    }
+]
