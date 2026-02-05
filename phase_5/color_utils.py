@@ -99,3 +99,63 @@ def get_intensity_label(percent: int) -> str:
         return "Bright"
     else:
         return "Very Bright"
+
+# Semantic Color Palette
+SEMANTIC_COLORS = {
+    # Whites / Ambers
+    "warm_white": "#FFD1A3",
+    "cool_white": "#E3F3FF",
+    "neutral_white": "#FFFFFF",
+    "warm_amber": "#FFB347",
+    "amber": "#FFBF00",
+    "candlelight": "#FF9329",
+    
+    # Primaries
+    "red": "#FF0000",
+    "green": "#00FF00",
+    "blue": "#0000FF",
+    
+    # Secondary / Theatrical
+    "cool_blue": "#4A90E2",
+    "night_blue": "#141E30",
+    "cyan": "#00FFFF",
+    "magenta": "#FF00FF",
+    "purple": "#800080",
+    "lavender": "#E6E6FA",
+    "teal": "#008080",
+    "orange": "#FFA500",
+    "yellow": "#FFFF00",
+    "lime": "#00FF00",
+    "pink": "#FFC0CB",
+    "uv": "#3D0C02",
+    "black": "#000000",
+    "off": "#000000"
+}
+
+def get_hex_from_semantic(color_name: str) -> str:
+    """
+    Translate semantic color name to hex color.
+    Returns white (#FFFFFF) if unknown, to ensure visibility.
+    
+    Args:
+        color_name: Semantic name (e.g. "warm_amber", "Red")
+        
+    Returns:
+        Hex string (e.g. "#FFB347")
+    """
+    if not color_name:
+        return "#FFFFFF"
+        
+    # Normalize
+    key = color_name.lower().replace(" ", "_")
+    
+    # Direct lookup
+    if key in SEMANTIC_COLORS:
+        return SEMANTIC_COLORS[key]
+    
+    # Check if it's already a hex code (simple validation)
+    if key.startswith("#") and len(key) in [4, 7]:
+        return color_name
+        
+    # Fallback
+    return "#FFFFFF"
