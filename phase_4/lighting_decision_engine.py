@@ -97,7 +97,7 @@ def get_retriever() -> RetrieverProtocol:
     Attempts to use Phase 3 retriever if available, otherwise uses simple fallback.
     """
     try:
-        from pipeline.rag_retriever import get_retriever as get_rag_retriever
+        from phase_3.rag_retriever import get_retriever as get_rag_retriever
         return get_rag_retriever()
     except ImportError:
         print("Phase 3 retriever not available. Using simple fallback.")
@@ -144,8 +144,8 @@ class Transition(BaseModel):
 class LightingParameters(BaseModel):
     """Semantic lighting parameters — NO DMX here"""
     intensity: float = Field(
-        description="Intensity level 0.0-100.0 percent",
-        ge=0.0, le=100.0
+        description="Intensity level 0.0-1.0 normalized",
+        ge=0.0, le=1.0
     )
     color: str = Field(
         description="Color name or hex code, e.g. 'warm_amber', 'deep_red', '#FF5500'"
@@ -399,7 +399,9 @@ class LightingDecisionEngine:
         color = primary_colors[0].get("name", "white")
         
         intensity_config = palette.get("intensity", {"default": 50})
-        intensity = intensity_config.get("default", 50)
+        raw_intensity = intensity_config.get("default", 50)
+        # Normalize intensity from 0-100 to 0-1 and clamp
+        intensity = max(0.0, min(1.0, raw_intensity / 100.0))
         
         transition_config = palette.get("transition", {"type": "fade", "duration": 2.0})
         try:
