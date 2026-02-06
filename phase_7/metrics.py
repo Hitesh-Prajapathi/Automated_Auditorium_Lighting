@@ -1,14 +1,11 @@
 """
 Unified metrics computation engine for Phase 7.
 
-<<<<<<< HEAD
 Provides a single interface to compute all research-grade metrics:
 - Consistency (determinism, drift)
 - Coverage (group utilization)
 - Stability (cross-run)
 
-=======
->>>>>>> phase_7
 IMPORTANT: This engine is OBSERVATIONAL ONLY.
 It does NOT influence execution.
 """
@@ -36,7 +33,6 @@ class MetricsEngine:
     Computes research-grade metrics for lighting decisions.
     
     IMPORTANT: This engine is OBSERVATIONAL ONLY.
-<<<<<<< HEAD
     It does NOT influence execution or modify lighting intent.
     
     Usage:
@@ -69,15 +65,6 @@ class MetricsEngine:
         Returns:
             Dict with coverage and diversity metrics
         """
-=======
-    """
-    
-    def __init__(self, available_groups: Optional[Set[str]] = None):
-        self.available_groups = available_groups or set()
-    
-    def evaluate_instruction(self, instruction: dict) -> dict:
-        """Compute all metrics for a single instruction."""
->>>>>>> phase_7
         return {
             "coverage": compute_group_coverage(instruction, self.available_groups),
             "diversity": compute_parameter_diversity(instruction)
@@ -89,7 +76,6 @@ class MetricsEngine:
         instruction_b: dict,
         epsilon: float = 0.05
     ) -> dict:
-<<<<<<< HEAD
         """
         Compare two instructions for consistency.
         
@@ -101,9 +87,6 @@ class MetricsEngine:
         Returns:
             Dict with determinism score and breakdown
         """
-=======
-        """Compare two instructions for consistency."""
->>>>>>> phase_7
         score, breakdown = compute_determinism_score(
             instruction_a, instruction_b, epsilon
         )
@@ -117,7 +100,6 @@ class MetricsEngine:
         }
     
     def evaluate_sequence(self, instructions: List[dict]) -> dict:
-<<<<<<< HEAD
         """
         Evaluate a sequence of instructions for drift.
         
@@ -127,9 +109,6 @@ class MetricsEngine:
         Returns:
             Dict with drift score and count
         """
-=======
-        """Evaluate a sequence of instructions for drift."""
->>>>>>> phase_7
         return {
             "drift_score": compute_drift_score(instructions),
             "num_instructions": len(instructions)
@@ -140,7 +119,6 @@ class MetricsEngine:
         runs: List[List[dict]],
         epsilon: float = 0.05
     ) -> dict:
-<<<<<<< HEAD
         """
         Evaluate cross-run stability.
         
@@ -151,9 +129,6 @@ class MetricsEngine:
         Returns:
             Dict with stability metrics
         """
-=======
-        """Evaluate cross-run stability."""
->>>>>>> phase_7
         return compute_cross_run_stability(runs, epsilon)
     
     def generate_report(
@@ -161,7 +136,6 @@ class MetricsEngine:
         instructions: List[dict],
         runs: Optional[List[List[dict]]] = None
     ) -> dict:
-<<<<<<< HEAD
         """
         Generate comprehensive metrics report.
         
@@ -172,9 +146,6 @@ class MetricsEngine:
         Returns:
             Complete metrics report
         """
-=======
-        """Generate comprehensive metrics report."""
->>>>>>> phase_7
         report = {
             "summary": {
                 "num_instructions": len(instructions),
@@ -184,10 +155,7 @@ class MetricsEngine:
             "instruction_metrics": []
         }
         
-<<<<<<< HEAD
         # Per-instruction metrics
-=======
->>>>>>> phase_7
         for i, instr in enumerate(instructions):
             report["instruction_metrics"].append({
                 "index": i,
@@ -195,10 +163,7 @@ class MetricsEngine:
                 **self.evaluate_instruction(instr)
             })
         
-<<<<<<< HEAD
         # Stability if multiple runs provided
-=======
->>>>>>> phase_7
         if runs and len(runs) > 1:
             report["stability_metrics"] = self.evaluate_runs(runs)
         

@@ -1,12 +1,8 @@
 """
 Stability metrics for cross-run consistency.
-<<<<<<< HEAD
 
 Measures how stable LLM decisions are when run multiple
 times with the same inputs. Important for real-world usability.
-=======
-Bridges to real-world usability.
->>>>>>> phase_7
 """
 from typing import List
 from .consistency import compute_determinism_score
@@ -18,7 +14,6 @@ def compute_cross_run_stability(
 ) -> dict:
     """
     Compute stability across multiple runs with same inputs.
-<<<<<<< HEAD
     
     High stability means the LLM produces consistent lighting
     decisions across runs, which is important for production use.
@@ -33,8 +28,6 @@ def compute_cross_run_stability(
         - stability_score: Average similarity across runs (0-1)
         - num_runs: Number of runs compared
         - epsilon: Intensity tolerance used
-=======
->>>>>>> phase_7
     """
     if len(runs) < 2:
         return {
@@ -68,7 +61,6 @@ def compute_pairwise_stability(
     runs: List[List[dict]],
     epsilon: float = 0.05
 ) -> dict:
-<<<<<<< HEAD
     """
     Compute pairwise stability between all run combinations.
     
@@ -86,11 +78,6 @@ def compute_pairwise_stability(
             "pairwise_score": 1.0,
             "num_comparisons": 0
         }
-=======
-    """Compute pairwise stability between all run combinations."""
-    if len(runs) < 2:
-        return {"pairwise_score": 1.0, "num_comparisons": 0}
->>>>>>> phase_7
     
     all_scores = []
     comparisons = 0

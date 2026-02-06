@@ -22,7 +22,6 @@ def compute_jaccard_similarity(set_a: Set, set_b: Set) -> float:
     Compute Jaccard similarity between two sets.
     
     J(A, B) = |A ∩ B| / |A ∪ B|
-<<<<<<< HEAD
     
     Args:
         set_a: First set
@@ -30,8 +29,6 @@ def compute_jaccard_similarity(set_a: Set, set_b: Set) -> float:
     
     Returns:
         Similarity score between 0.0 and 1.0
-=======
->>>>>>> phase_7
     """
     if not set_a and not set_b:
         return 1.0
@@ -41,7 +38,6 @@ def compute_jaccard_similarity(set_a: Set, set_b: Set) -> float:
 
 
 def extract_group_ids(instruction: dict) -> Set[str]:
-<<<<<<< HEAD
     """
     Extract group IDs from a LightingInstruction.
     
@@ -51,9 +47,6 @@ def extract_group_ids(instruction: dict) -> Set[str]:
     Returns:
         Set of group_id strings
     """
-=======
-    """Extract group IDs from a LightingInstruction."""
->>>>>>> phase_7
     return {g.get("group_id") for g in instruction.get("groups", [])}
 
 
@@ -69,7 +62,6 @@ def compute_determinism_score(
     - Same group_ids selected
     - Same transition types
     - Intensity within ε tolerance
-<<<<<<< HEAD
     
     This definition is fair, reproducible, and defensible in papers.
     
@@ -80,8 +72,6 @@ def compute_determinism_score(
     
     Returns:
         Tuple of (score 0-1, breakdown dict)
-=======
->>>>>>> phase_7
     """
     groups_a = {g["group_id"]: g for g in instruction_a.get("groups", [])}
     groups_b = {g["group_id"]: g for g in instruction_b.get("groups", [])}
@@ -115,11 +105,7 @@ def compute_determinism_score(
     
     param_score = sum(param_matches) / len(param_matches) if param_matches else 1.0
     
-<<<<<<< HEAD
     # Combined score (average of group match and parameter match)
-=======
-    # Combined score
->>>>>>> phase_7
     score = (group_match + param_score) / 2
     
     return score, {
@@ -135,7 +121,6 @@ def compute_determinism_score(
 def compute_drift_score(instructions: List[dict]) -> float:
     """
     Compute drift across a sequence of instructions.
-<<<<<<< HEAD
     
     Drift measures how much lighting decisions change across
     consecutive scenes. Lower is better (less drift = more stable).
@@ -145,9 +130,6 @@ def compute_drift_score(instructions: List[dict]) -> float:
     
     Returns:
         Average drift score (0.0 = no drift, 1.0 = complete change)
-=======
-    Lower is better (less drift = more stable).
->>>>>>> phase_7
     """
     if len(instructions) < 2:
         return 0.0
@@ -155,10 +137,6 @@ def compute_drift_score(instructions: List[dict]) -> float:
     drifts = []
     for i in range(1, len(instructions)):
         score, _ = compute_determinism_score(instructions[i-1], instructions[i])
-<<<<<<< HEAD
         drifts.append(1.0 - score)  # Drift = 1 - similarity
-=======
-        drifts.append(1.0 - score)
->>>>>>> phase_7
     
     return sum(drifts) / len(drifts)
