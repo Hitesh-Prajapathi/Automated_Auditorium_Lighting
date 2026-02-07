@@ -37,19 +37,6 @@ def compute_jaccard_similarity(set_a: Set, set_b: Set) -> float:
     return intersection / union if union > 0 else 0.0
 
 
-def extract_group_ids(instruction: dict) -> Set[str]:
-    """
-    Extract group IDs from a LightingInstruction.
-    
-    Args:
-       œ instruction: LightingInstruction dict
-    
-    Returns:
-        Set of group_id strings
-    """
-    return {g.get("group_id") for g in instruction.get("groups", [])}
-
-
 def compute_determinism_score(
     instruction_a: dict,
     instruction_b: dict,
@@ -73,8 +60,8 @@ def compute_determinism_score(
     Returns:
         Tuple of (score 0-1, breakdown dict)
     """
-    groups_a = {g["group_id"]: g for g in instruction_a.get("groups", [])}
-    groups_b = {g["group_id"]: g for g in instruction_b.get("groups", [])}
+    groups_a = {g["group_id"]: g for g in instruction_a.get("groups", []) if "group_id" in g}
+    groups_b = {g["group_id"]: g for g in instruction_b.get("groups", []) if "group_id" in g}
     
     # 1. Group ID match (Jaccard)
     ids_a, ids_b = set(groups_a.keys()), set(groups_b.keys())
@@ -103,7 +90,14 @@ def compute_determinism_score(
         
         param_matches.append(intensity_ok and transition_ok)
     
-    param_score = sum(param_matches) / len(param_matches) if param_matches else 1.0
+    if param_matches:
+        param_score = sum(param_matches) / len(param_matches)
+    else:
+        # If no common groups, check if both are empty (perfect match) or disjoint (mismatch)
+        if not ids_a and not ids_b:
+            param_score = 1.0
+        else:
+            param_score = 0.0
     
     # Combined score (average of group match and parameter match)
     score = (group_match + param_score) / 2
