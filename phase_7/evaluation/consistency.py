@@ -42,7 +42,7 @@ def extract_group_ids(instruction: dict) -> Set[str]:
     Extract group IDs from a LightingInstruction.
     
     Args:
-        instruction: LightingInstruction dict
+       œ instruction: LightingInstruction dict
     
     Returns:
         Set of group_id strings
