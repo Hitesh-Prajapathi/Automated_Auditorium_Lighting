@@ -134,3 +134,16 @@ def compute_drift_score(instructions: List[dict]) -> float:
         drifts.append(1.0 - score)  # Drift = 1 - similarity
     
     return sum(drifts) / len(drifts)
+
+
+def extract_group_ids(instruction: dict) -> Set[str]:
+    """
+    Extract set of group IDs from a LightingInstruction dict.
+
+    Args:
+        instruction: LightingInstruction dict with 'groups' list
+
+    Returns:
+        Set of group_id strings
+    """
+    return {g["group_id"] for g in instruction.get("groups", []) if "group_id" in g}

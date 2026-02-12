@@ -12,6 +12,10 @@ Key design principles:
 """
 
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from typing import Dict, List, Any, Optional, Protocol
 from enum import Enum
 from pydantic import BaseModel, Field
@@ -323,8 +327,19 @@ class LightingDecisionEngine:
         Returns:
             LightingInstruction with semantic lighting intent
         """
-        emotion = scene_data.get("emotion", {}).get("primary_emotion", "neutral")
-        scene_text = scene_data.get("content", {}).get("text", "")
+        emotion_data = scene_data.get("emotion")
+        if isinstance(emotion_data, dict):
+            emotion = emotion_data.get("primary_emotion", "neutral")
+        elif isinstance(emotion_data, str):
+            emotion = emotion_data
+        else:
+            emotion = "neutral"
+
+        raw_content = scene_data.get("content", "")
+        if isinstance(raw_content, str):
+            scene_text = raw_content
+        else:
+            scene_text = raw_content.get("text", "")
         scene_id = scene_data.get("scene_id", "unknown")
         timing = scene_data.get("timing", {})
         

@@ -76,6 +76,7 @@ class PipelineRunner:
             
             # Process each scene
             lighting_instructions = []
+            processed_scenes = []
             for idx, scene in enumerate(scenes):
                 scene_id = scene.get("scene_id", f"scene_{idx:03d}")
                 self.state.set_current_scene(scene_id, idx)
@@ -89,6 +90,7 @@ class PipelineRunner:
                 # Phase 4: Decision Engine (REQUIRED - HARD FAIL after fallback)
                 instruction = self._run_phase_4(enriched_scene, rag_context, result)
                 lighting_instructions.append(instruction)
+                processed_scenes.append(enriched_scene)
             
             # Phase 5: Simulation (OPTIONAL - log & continue)
             if self.config.enable_phase_5:
@@ -100,7 +102,7 @@ class PipelineRunner:
             
             # Phase 7: Evaluation (OPTIONAL - log & continue)
             if self.config.enable_phase_7:
-                self._run_phase_7(lighting_instructions, result)
+                self._run_phase_7(lighting_instructions, processed_scenes, result)
             else:
                 result.add_phase_result(
                     self.state.skip_phase("phase_7", "Disabled by configuration")
@@ -194,9 +196,11 @@ class PipelineRunner:
         try:
             from phase_2 import analyze_emotion
             
-            content = scene.get("content", {}).get("text", "")
-            if not content:
-                content = scene.get("content", "")
+            raw_content = scene.get("content", "")
+            if isinstance(raw_content, str):
+                content = raw_content
+            else:
+                content = raw_content.get("text", "")
             
             emotion_analysis = analyze_emotion(content)
             scene["emotion"] = emotion_analysis
@@ -236,9 +240,11 @@ class PipelineRunner:
             
             retriever = get_retriever()
             emotion = scene.get("emotion", {}).get("primary_emotion", "neutral")
-            scene_text = scene.get("content", {}).get("text", "")
-            if not scene_text:
-                scene_text = scene.get("content", "")
+            raw_content = scene.get("content", "")
+            if isinstance(raw_content, str):
+                scene_text = raw_content
+            else:
+                scene_text = raw_content.get("text", "")
             
             context = retriever.build_context_for_llm(emotion, scene_text)
             
@@ -353,7 +359,8 @@ class PipelineRunner:
     
     def _run_phase_7(
         self, 
-        lighting_instructions: List[Dict], 
+        lighting_instructions: List[Dict],
+        processed_scenes: List[Dict],
         result: PipelineResult
     ) -> None:
         """
@@ -363,14 +370,40 @@ class PipelineRunner:
         self.state.start_phase("phase_7")
         
         try:
-            # Phase 7 entry point - evaluation (PENDING implementation)
-            # from phase_7 import evaluate
+            from pathlib import Path
+            from phase_7 import TraceLogger, MetricsEngine
             
-            # Phase 7 not yet implemented
+            # --- Trace Logging ---
+            trace_logger = TraceLogger(output_dir=Path("data/traces/"), seed=42)
+            for scene, instruction in zip(processed_scenes, lighting_instructions):
+                trace_logger.log_decision(scene, instruction)
+            trace_file = trace_logger.save()
+            logger.info(f"Phase 7: Trace saved to {trace_file}")
+            print(f"📝 Trace saved: {trace_file} ({trace_logger.get_entry_count()} entries)")
+            
+            # --- Metrics ---
+            available_groups = {"front_wash", "back_light", "side_fill", "specials", "ambient"}
+            metrics_engine = MetricsEngine(available_groups=available_groups)
+            report = metrics_engine.generate_report(lighting_instructions)
+            
+            # Print summary
+            print(f"📊 Metrics Report:")
+            print(f"   Scenes:    {report['summary']['num_instructions']}")
+            seq = report.get('sequence_metrics', {})
+            print(f"   Drift:     {seq.get('drift_score', 'N/A')}")
+            for im in report.get('instruction_metrics', []):
+                cov = im.get('coverage', {})
+                div = im.get('diversity', {})
+                print(f"   Scene {im.get('scene_id', '?')}: coverage={cov}, diversity={div}")
+            
             phase_result = self.state.complete_phase(
                 "phase_7",
-                PhaseStatus.SKIPPED,
-                error_message="Phase 7 not yet implemented"
+                PhaseStatus.SUCCESS,
+                output={
+                    "trace_file": str(trace_file),
+                    "entries": trace_logger.get_entry_count(),
+                    "drift_score": seq.get('drift_score')
+                }
             )
             result.add_phase_result(phase_result)
             

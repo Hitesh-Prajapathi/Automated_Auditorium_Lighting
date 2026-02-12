@@ -28,15 +28,15 @@ class PipelineConfig:
     Does NOT control phase-internal logic.
     """
     # Optional phase toggles
-    enable_phase_5: bool = True
-    enable_phase_7: bool = True
+    enable_phase_5: bool = False
+    enable_phase_7: bool = False
     enable_phase_8: bool = False  # Future, not implemented
     
     # Execution mode
     demo_mode: bool = False
     
     # Pass-through config (not interpreted by Phase 6)
-    use_llm: bool = False
+    use_llm: bool = True
     
     # Output paths
     output_dir: Optional[str] = None
