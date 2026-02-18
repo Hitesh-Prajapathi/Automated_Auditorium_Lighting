@@ -1,50 +1,55 @@
-# Automated Auditorium Lighting - Directory Structure
+# Directory Structure
+
+> Reflects `baseline-rule-engine-stable` tag. Last updated: 2026-02-12.
 
 ```
 Automated_Auditorium_Lighting/
 │
-├── .agent/
-│   └── KNOWLEDGE_BASE.md
+├── .env                            # OPENAI_API_KEY (for GenAI mode)
 │
-├── api/
-│   ├── __init__.py
-│   ├── routes.py
-│   └── websocket.py
-│
-├── contracts/
+├── contracts/                      # Phase 0: Schema Definitions (Locked)
 │   ├── fixture_schema.json
 │   ├── lighting_instruction_schema.json
 │   ├── lighting_semantics_schema.json
 │   └── scene_schema.json
 │
 ├── data/
-│   ├── cleaned_scripts/
-│   │   └── Script-20.txt
-│   ├── lighting_cues/
-│   │   └── Script-1_cues.json
-│   ├── logs/
-│   ├── raw_scripts/
+│   ├── raw_scripts/                # Input scripts (.txt, .pdf, .docx)
 │   │   ├── Script-1.txt
 │   │   └── Script-10.pdf
-│   ├── segmented_scripts/
-│   │   └── Script-21.txt
-│   └── standardized_output/
-│       ├── Script-1.json
-│       ├── Script-10_processed.json
-│       ├── Script-1_processed.json
-│       └── Script-20_processed.json
+│   ├── cleaned_scripts/            # Intermediate cleaned text
+│   ├── segmented_scripts/          # Segmented scenes
+│   ├── standardized_output/        # Phase 1 JSON output
+│   │   ├── Script-1.json
+│   │   ├── Script-1_processed.json
+│   │   ├── Script-10_processed.json
+│   │   └── Script-20_processed.json
+│   ├── lighting_cues/              # Phase 4 output
+│   │   └── Script-1_cues.json
+│   ├── traces/                     # Phase 7 trace logs
+│   │   └── trace_<uuid>.json
+│   └── logs/
 │
 ├── docs/
+│   ├── PROJECT_STRUCTURE.md
+│   ├── DIRECTORY_STRUCTURE.md      ← (this file)
+│   ├── audit_1_to_6.md
 │   ├── PHASE_1_STRUCTURE.md
 │   ├── PHASE_2_STRUCTURE.md
 │   ├── PHASE_3_README.md
 │   ├── PHASE_4_STRUCTURE.md
 │   ├── PHASE_6_STRUCTURE.md
-│   ├── PROJECT_STRUCTURE.md
-│   ├── audit_1_to_6.md
-│   └── DIRECTORY_STRUCTURE.md  ← (this file)
+│   └── workflow_knowledge/
+│       ├── PHASE_0_CONTRACTS.md
+│       ├── PHASE_1_SCRIPT_INGESTION.md
+│       ├── PHASE_2_EMOTION_ENRICHMENT.md
+│       ├── PHASE_3_DUAL_RAG.md
+│       ├── PHASE_4_LIGHTING_DECISION_ENGINE.md
+│       ├── PHASE_5_SIMULATION_VISUALIZATION.md
+│       ├── PHASE_6_ORCHESTRATION.md
+│       └── PHASE_7_EVALUATION_METRICS.md
 │
-├── phase_1/                    # Script Parsing & Scene Extraction
+├── phase_1/                        # Script Parsing & Scene Extraction
 │   ├── __init__.py
 │   ├── format_detector.py
 │   ├── json_builder.py
@@ -52,20 +57,20 @@ Automated_Auditorium_Lighting/
 │   ├── text_cleaner.py
 │   └── timestamp_generator.py
 │
-├── phase_2/                    # Emotion Analysis
+├── phase_2/                        # Emotion Analysis
 │   ├── __init__.py
 │   └── emotion_analyzer.py
 │
-├── phase_3/                    # Dual RAG (Knowledge Layer)
+├── phase_3/                        # Dual RAG (Knowledge Layer)
 │   ├── __init__.py
-│   ├── rag_retriever.py
+│   ├── rag_retriever.py            # Phase3Retriever class
 │   ├── ingestion/
 │   │   └── knowledge_ingestion.py
 │   ├── knowledge/
 │   │   ├── auditorium/
-│   │   │   └── fixtures.json
+│   │   │   └── fixtures.json       # 54 fixtures
 │   │   └── semantics/
-│   │       └── baseline_semantics.json
+│   │       └── baseline_semantics.json  # 7 rules
 │   ├── rag/
 │   │   ├── auditorium/
 │   │   │   ├── index.faiss
@@ -77,11 +82,11 @@ Automated_Auditorium_Lighting/
 │       ├── fixture_knowledge_schema.json
 │       └── lighting_semantics_knowledge_schema.json
 │
-├── phase_4/                    # Lighting Decision Engine
+├── phase_4/                        # Lighting Decision Engine
 │   ├── __init__.py
 │   └── lighting_decision_engine.py
 │
-├── phase_5/                    # Simulation & Visualization
+├── phase_5/                        # Simulation & Visualization
 │   ├── __init__.py
 │   ├── README.md
 │   ├── IMPLEMENTATION_PLAN.md
@@ -93,7 +98,7 @@ Automated_Auditorium_Lighting/
 │   └── static/
 │       └── index.html
 │
-├── phase_6/                    # Orchestration & Pipeline Control
+├── phase_6/                        # Orchestration & Pipeline Control
 │   ├── __init__.py
 │   ├── README.md
 │   ├── batch_executor.py
@@ -102,7 +107,7 @@ Automated_Auditorium_Lighting/
 │   ├── pipeline_runner.py
 │   └── state_tracker.py
 │
-├── phase_7/                    # Logging & Evaluation
+├── phase_7/                        # Logging & Evaluation
 │   ├── __init__.py
 │   ├── README.md
 │   ├── demo.py
@@ -118,7 +123,7 @@ Automated_Auditorium_Lighting/
 │       ├── ablation.yaml
 │       └── baseline.yaml
 │
-├── phase_8/                    # Hardware Execution (Future)
+├── phase_8/                        # Hardware Execution (Future)
 │   ├── __init__.py
 │   ├── dmx_adapter.py
 │   ├── lightkey_control.py
@@ -128,20 +133,22 @@ Automated_Auditorium_Lighting/
 │   └── mappings/
 │       └── dmx_mappings.json
 │
+├── api/
+│   ├── __init__.py
+│   ├── routes.py
+│   └── websocket.py
+│
 ├── static/
-│   ├── css/
-│   │   └── style.css
+│   ├── css/style.css
 │   └── js/
 │       ├── viewer.js
 │       └── websocket_client.js
 │
 ├── templates/
 │   ├── index.html
-│   └── components/
-│       └── fixture_card.html
+│   └── components/fixture_card.html
 │
 ├── tests/
-│
 ├── utils/
 │   ├── __init__.py
 │   └── file_io.py
@@ -151,23 +158,23 @@ Automated_Auditorium_Lighting/
 ├── main.py
 ├── main_phase2.py
 ├── main_visualize.py
-├── README.md
 ├── requirements.txt
-└── rules.md
+├── rules.md
+└── run_pipeline_test.py
 ```
 
 ---
 
 ## Phase Summary
 
-| Phase | Directory | Purpose |
-|-------|-----------|---------|
-| 0 | `contracts/` | Schema definitions (locked) |
-| 1 | `phase_1/` | Script parsing & scene extraction |
-| 2 | `phase_2/` | Emotion analysis (optional) |
-| 3 | `phase_3/` | Dual RAG knowledge retrieval |
-| 4 | `phase_4/` | Lighting decision engine |
-| 5 | `phase_5/` | Simulation & visualization |
-| 6 | `phase_6/` | Orchestration & pipeline control |
-| 7 | `phase_7/` | Logging & evaluation |
-| 8 | `phase_8/` | Hardware execution (future) |
+| Phase | Directory | Purpose | Failure Mode |
+|-------|-----------|---------|--------------|
+| 0 | `contracts/` | Schema definitions (locked) | N/A |
+| 1 | `phase_1/` | Script parsing & scene extraction | Hard fail |
+| 2 | `phase_2/` | Emotion analysis | Soft — defaults to neutral |
+| 3 | `phase_3/` | Dual RAG knowledge retrieval | Hard fail |
+| 4 | `phase_4/` | Lighting decision engine | Hard fail (after fallback) |
+| 5 | `phase_5/` | Simulation & visualization | Soft — log & continue |
+| 6 | `phase_6/` | Orchestration & pipeline control | Controller |
+| 7 | `phase_7/` | Logging & evaluation | Soft — log & continue |
+| 8 | `phase_8/` | Hardware execution (future) | Not implemented |

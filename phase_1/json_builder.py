@@ -5,7 +5,7 @@ JSON output builder module
 import json
 from datetime import datetime
 from config import JSON_INDENT, TIMESTAMP_FORMAT
-from pipeline.timestamp_generator import format_timestamp
+from phase_1.timestamp_generator import format_timestamp
 
 def build_scene_json(scene_id, scene_data, timestamp, emotion_analysis):
     """

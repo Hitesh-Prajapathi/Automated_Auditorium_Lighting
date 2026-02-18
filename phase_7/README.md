@@ -1,82 +1,79 @@
 # Phase 7 — Evaluation & Metrics
 
-**Owner:** Friend B  
-**Purpose:** Observational logging and metrics for research paper support
+> Reflects `baseline-rule-engine-stable` tag. Last updated: 2026-02-12.
 
----
+## Purpose
 
-## ⚠️ CRITICAL RULE
+Phase 7 observes and logs execution traces, then computes research-grade metrics for lighting decisions. It is fully removable without affecting system execution.
 
-> **Phase 7 must be fully removable without affecting system execution or outputs.**
+## Components
 
-This phase:
-- ❌ Does NOT call Phase 4 functions
-- ❌ Does NOT invoke LLM
-- ❌ Does NOT modify lighting intent
-- ❌ Does NOT influence execution
+| File | Component | Description |
+|------|-----------|-------------|
+| `trace_logger.py` | `TraceLogger` | Logs input/output hashes per scene |
+| `metrics.py` | `MetricsEngine` | Computes coverage, diversity, drift, determinism |
+| `schemas.py` | `TraceEntry`, `TraceLog`, `RAGContextRef` | Pydantic trace models |
+| `evaluation/consistency.py` | `compute_jaccard_similarity`, `compute_determinism_score`, `compute_drift_score`, `extract_group_ids` | Consistency metrics |
+| `evaluation/coverage.py` | `compute_group_coverage`, `compute_parameter_diversity` | Coverage metrics |
+| `evaluation/stability.py` | `compute_cross_run_stability` | Cross-run stability |
 
----
+## Pipeline Integration
 
-## Data Sources
+```python
+# In pipeline_runner.py (_run_phase_7):
+trace_logger = TraceLogger(output_dir="data/traces/", seed=42)
+for scene, instruction in zip(scenes, instructions):
+    trace_logger.log_decision(scene, instruction)
+trace_logger.save()  # → data/traces/trace_<uuid>.json
 
-Phase 7 reads ONLY from:
-- `data/lighting_cues/*.json` (pre-generated LightingInstructions)
-- `tests/fixtures/phase_7/` (pre-generated test data)
-
-**NEVER** import or call functions from other phases.
-
----
-
-## RAG Context ID Policy
-
-If logging RAG context, ONLY opaque identifiers are allowed:
-
-| Allowed | Forbidden |
-|---------|-----------|
-| ✅ `document_id` | ❌ Chunk text |
-| ✅ `chunk_id` | ❌ Embeddings |
-| | ❌ Similarity scores |
-
----
-
-## Determinism Definition
-
-Determinism is defined **structurally** (not bytewise):
-- Same `group_ids` selected
-- Same `transition.type` values
-- Intensity within ε = ±0.05
-
----
-
-## Module Structure
-
-```
-phase_7/
-├── README.md              ← This file
-├── schemas.py             ← Internal pydantic models
-├── trace_logger.py        ← Trace capture module
-├── metrics.py             ← Unified metrics engine
-├── demo.py                ← Standalone demo script
-├── evaluation/
-│   ├── consistency.py     ← Jaccard + drift
-│   ├── coverage.py        ← Group coverage
-│   └── stability.py       ← Cross-run stability
-└── experiment_configs/
-    ├── baseline.yaml
-    └── ablation.yaml
+metrics_engine = MetricsEngine(available_groups={"front_wash", "back_light", ...})
+report = metrics_engine.generate_report(instructions)
 ```
 
----
+## Baseline Metrics
 
-## Forbidden Actions
+| Metric | Value | Description |
+|--------|-------|-------------|
+| Drift Score | 0.333 | Avg change between consecutive scenes (0=stable, 1=chaotic) |
+| Coverage | 0.4 | Groups used / total (2 of 5) |
+| Intensity Range | 0.075–0.24 | Per-scene intensity diversity |
+| Transition Types | 1 | Only `fade` in baseline |
+| Determinism | 1.0 | Same input → same output (guaranteed in rule-based mode) |
 
-| Action | Reason |
-|--------|--------|
-| `from phase_4 import *` | Phase isolation |
-| Call LLM APIs | Phase 4 responsibility |
-| Query RAG | Phase 3 responsibility |
-| Score "good/bad" lighting | Quality ≠ evaluation |
+## Metric Definitions
 
----
+- **Drift Score**: `avg(1 - Jaccard_similarity)` between consecutive scene instructions
+- **Coverage**: `|groups_used| / |available_groups|`
+- **Determinism**: Structural match: group IDs + intensity within ε=0.05 + transition type
+- **Diversity**: Spread of intensity, transition types, and color count per scene
 
-*Last updated: 2026-02-05*
+## Boundaries
+
+Phase 7 is **OBSERVATIONAL ONLY**. It does NOT:
+- Import from Phase 4 or other phases
+- Call LLM APIs
+- Modify lighting intent
+- Influence execution
+
+## Failure Handling
+
+Phase 7 is **OPTIONAL** — non-fatal. If metrics fail, the pipeline logs a warning and continues.
+
+## Output
+
+Trace files saved to `data/traces/trace_<uuid>.json`:
+
+```json
+{
+  "run_id": "a366f360-...",
+  "created_at": "2026-02-12T...",
+  "entries": [
+    {
+      "scene_id": "unknown",
+      "input_hash": "abc123...",
+      "output_hash": "def456...",
+      "seed": 42
+    }
+  ]
+}
+```

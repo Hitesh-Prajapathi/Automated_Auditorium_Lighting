@@ -1,205 +1,100 @@
-# Phase 4: Lighting Decision Engine
+# Phase 4 — Lighting Decision Engine
 
-## Overview
+> Reflects `baseline-rule-engine-stable` tag. Last updated: 2026-02-12.
 
-Phase 4 is the **Decision Engine** of the Automated Auditorium Lighting system. It converts scene emotions into lighting **INTENT** (not execution details).
+## 1. Purpose
 
-**Key principle:** Outputs groups and semantic parameters, never DMX channels or fixture IDs.
+Phase 4 generates a `LightingInstruction` for each scene. It supports two modes: a deterministic rule-based engine (baseline) and an LLM-enhanced engine (GenAI mode, pending SDK upgrade).
 
----
+## 2. Inputs
 
-## Architecture Position
+| Input | Source | Format |
+|-------|--------|--------|
+| Enriched scene dict | Phase 2 / Phase 6 | Dict with `emotion`, `content`, `timing` |
+| RAG context string | Phase 3 | Formatted text from `build_context_for_llm` |
 
-```
-Phase 1 → Phase 2 → Phase 3 → [Phase 4] → Phase 5 → Phase 7 → Phase 8
- Parsing   Emotion    RAG      Decision   Simulate  Evaluate  Hardware
-```
+## 3. Outputs
 
-### Inputs
-- **Scene data** (from Phase 1): Structured JSON with content, timing
-- **Emotion** (from Phase 2): Primary emotion, confidence
-- **RAG context** (from Phase 3): Auditorium knowledge, lighting semantics
+| Output | Destination | Format |
+|--------|-------------|--------|
+| `LightingInstruction` | Phase 5, Phase 7, `data/lighting_cues/` | Pydantic model / dict |
 
-### Outputs
-- **LightingInstruction**: Group-level, semantic lighting intent
-
----
-
-## File Structure
-
-```
-phase_4/
-├── __init__.py                    # Module exports
-└── lighting_decision_engine.py    # Core decision engine
-```
-
----
-
-## Core Components
-
-### LightingDecisionEngine
-
-The main class that converts scene data into lighting instructions.
+### LightingInstruction Structure
 
 ```python
-from phase_4 import LightingDecisionEngine, PipelineConfig
-
-engine = LightingDecisionEngine(use_llm=False)
-instruction = engine.generate_instruction(scene_data)
-```
-
-### Output Models (Pydantic)
-
-| Model | Purpose |
-|-------|---------|
-| `LightingInstruction` | Complete output from Phase 4 |
-| `GroupLightingInstruction` | Per-group lighting settings |
-| `LightingParameters` | Semantic parameters (intensity, color, focus) |
-| `TimeWindow` | Start/end timing |
-| `Transition` | Transition type and duration |
-
----
-
-## Contract Compliance
-
-Phase 4 output must satisfy `contracts/lighting_instruction_schema.json`:
-
-| Field | Constraint |
-|-------|------------|
-| `group_id` | String (not fixture_id) |
-| `intensity` | Float ∈ [0, 1] |
-| `color` | Semantic name (e.g., "warm_amber") |
-| `transition.type` | "cut", "fade", or "crossfade" |
-
----
-
-## Lighting Groups
-
-Phase 4 operates at **group level**, not fixture level:
-
-| Group ID | Description |
-|----------|-------------|
-| `front_wash` | Primary audience-facing illumination |
-| `back_light` | Separation from background, silhouettes |
-| `side_fill` | Side lighting for depth and dimension |
-| `specials` | Focused highlights, spotlights |
-| `ambient` | Overall wash, atmosphere |
-
----
-
-## Generation Modes
-
-### LLM Mode
-- Uses LangChain with OpenAI
-- Structured output parsing via Pydantic
-- Requires `OPENAI_API_KEY`
-
-### Rule-Based Mode (Fallback)
-- Deterministic palette-based generation
-- No external API required
-- Always produces valid output
-
-```python
-# Using LLM
-engine = LightingDecisionEngine(use_llm=True)
-
-# Using rules only
-engine = LightingDecisionEngine(use_llm=False)
-```
-
----
-
-## Fallback Behavior
-
-1. If LLM unavailable → use rule-based
-2. If LLM fails → fallback to rules (if `FALLBACK_TO_RULES=True`)
-3. If both fail → raise exception (Phase 6 handles)
-
----
-
-## Interfaces
-
-### RetrieverProtocol
-
-Phase 4 uses a protocol interface for Phase 3 retriever:
-
-```python
-class RetrieverProtocol(Protocol):
-    def retrieve_palette(self, emotion: str) -> Dict: ...
-    def build_context_for_llm(self, emotion: str, scene_text: str) -> str: ...
-```
-
-### SimpleRetriever
-
-Built-in fallback when Phase 3 is unavailable.
-
----
-
-## Hard Boundaries
-
-Phase 4 **MUST NOT**:
-- ❌ Output DMX channels
-- ❌ Output fixture IDs
-- ❌ Import from Phase 5, 7, or 8
-- ❌ Render visuals
-- ❌ Execute hardware commands
-
-Phase 4 **MUST**:
-- ✅ Output `group_id` only
-- ✅ Use normalized intensity [0, 1]
-- ✅ Use semantic color names
-- ✅ Provide declarative transitions
-
----
-
-## Usage Examples
-
-### Single Scene
-
-```python
-from phase_4 import generate_lighting_instruction
-
-scene_data = {
+{
     "scene_id": "scene_001",
-    "emotion": {"primary_emotion": "joy"},
-    "content": {"text": "A celebration begins!"},
-    "timing": {"start_time": 0, "end_time": 30}
+    "groups": [
+        {
+            "group_id": "front_wash",
+            "parameters": {"intensity": 0.75, "color": {...}},
+            "transition": {"type": "fade", "duration": 2.0}
+        }
+    ]
 }
-
-instruction = generate_lighting_instruction(scene_data, use_llm=False)
-print(instruction.groups[0].parameters.intensity)  # 0.8
 ```
 
-### Batch Processing
+Baseline produces 2 groups per scene: `front_wash` and `back_light`.
 
-```python
-from phase_4 import batch_generate_instructions
+## 4. Internal Components
 
-scenes = [scene1, scene2, scene3]
-instructions = batch_generate_instructions(scenes, use_llm=False)
-```
+### Classes
 
----
+| Component | Description |
+|-----------|-------------|
+| `LightingDecisionEngine` | Main class — creates LLM chain or falls back to rules |
+| `LightingInstruction` | Pydantic output model |
+| `GroupInstruction` | Per-group parameters (Pydantic) |
+| `SimpleRetriever` | Hardcoded palette fallback (used if Phase 3 unavailable) |
 
-## Configuration
+### Key Methods
 
-| Config Key | Type | Default | Description |
-|------------|------|---------|-------------|
-| `LLM_MODEL` | str | "gpt-4" | OpenAI model |
-| `LLM_TEMPERATURE` | float | 0.7 | Generation temperature |
-| `FALLBACK_TO_RULES` | bool | True | Use rules on LLM failure |
+| Method | Description |
+|--------|-------------|
+| `__init__(use_llm, api_key)` | Initializes engine; selects LLM or rule-based mode |
+| `generate_instruction(scene_data)` | Produces `LightingInstruction` for one scene |
+| `_create_llm_chain()` | Builds LangChain chain: `ChatPromptTemplate → ChatOpenAI → PydanticOutputParser` |
+| `_rule_based_generation(emotion, scene_text)` | Deterministic fallback using `retrieve_palette` |
+| `_build_group_instructions(palette)` | Converts palette dict → group instruction list |
 
----
+### Configuration (in `config.py`)
 
-## Testing
+| Config | Value | Description |
+|--------|-------|-------------|
+| `LLM_MODEL` | `gpt-4` | OpenAI model |
+| `LLM_TEMPERATURE` | `0.0` | Deterministic output |
+| `LLM_MAX_TOKENS` | `500` | Bill spike prevention |
+| `FALLBACK_TO_RULES` | `True` | Auto-fallback on LLM failure |
+| `LANGCHAIN_VERBOSE` | `False` | Debug logging |
 
-Tests are located in `tests/test_cue_generator.py`:
+### Operating Modes
 
-- Model validation tests
-- Rule-based generation tests
-- No DMX leakage verification
-- Group-level output verification
+| Mode | Config | Status | Description |
+|------|--------|--------|-------------|
+| Rule-based | `use_llm=False` | ✅ Active | Deterministic, uses `retrieve_palette` from Phase 3 |
+| GenAI (LLM) | `use_llm=True` | ⚠ Blocked | LangChain chain with GPT-4 + Pydantic structured output |
 
-```bash
-pytest tests/test_cue_generator.py -v
-```
+## 5. Boundaries
+
+- Phase 4 does **NOT** perform rendering or simulation (that is Phase 5)
+- Phase 4 does **NOT** perform RAG retrieval (that is Phase 3)
+- Phase 4 does **NOT** detect emotions (that is Phase 2)
+- Phase 4 does **NOT** compute metrics or log traces (that is Phase 7)
+
+## 6. Failure Handling
+
+| Failure | Type | Behavior |
+|---------|------|----------|
+| LLM API error | Caught | Falls back to rule-based if `FALLBACK_TO_RULES=True` |
+| Rule-based failure | **HARD FAIL** | Pipeline halts via `HardFailureError` |
+| Missing API key | Caught | `use_llm` set to `False` automatically |
+| Output parsing error | Caught | Falls back to rule-based |
+
+Phase 4 is REQUIRED — pipeline halts if both LLM and rule-based paths fail.
+
+## 7. Current Limitations
+
+- LLM mode blocked by `langchain-openai==0.1.6` / `openai==1.30.1` proxy arg conflict
+- Rule-based mode uses only 2 of 5 available groups (coverage = 0.4)
+- `dotenv` loaded at module level; `.env` file must exist for import to succeed
+- `SimpleRetriever` hardcoded palettes only used if Phase 3 retriever is unavailable
