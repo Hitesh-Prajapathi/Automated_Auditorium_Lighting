@@ -68,107 +68,92 @@ class Phase3Retriever:
         docs = self.semantics_db.similarity_search(query, k=k)
         return [doc.metadata for doc in docs]
 
+    def retrieve_palette(self, emotion: str) -> Dict[str, Any]:
+        """
+        Adapter method for Phase 4: Retrieve a formatted palette for rule-based generation.
+        Uses RAG FAISS index. Falls back to SimpleRetriever defaults if no valid match found.
+        """
+        emotion_lower = emotion.lower().strip()
+        
+        # === FAISS RETRIEVAL ===
+        # Search for the matching emotion rule (k=3 to allow validation)
+        results = self.retrieve_semantics_context(emotion_lower, "general", k=3)
+        
+        # Find the result that actually matches this emotion
+        rule = None
+        semantics = {}
+        
+        for r in results:
+            if r.get("context_type") == "emotion" and r.get("context_value", "").lower() == emotion_lower:
+                rule = r
+                semantics = r.get("rules", {})
+                break
+        
+        # If no exact match found, try the first emotion-type result anyway
+        if rule is None:
+            for r in results:
+                if r.get("context_type") == "emotion":
+                    rule = r
+                    semantics = r.get("rules", {})
+                    print(f"⚠️  No exact RAG match for '{emotion_lower}', using closest: '{r.get('context_value')}'")
+                    break
+        
+        # If still nothing, return empty (Phase 4 SimpleRetriever handles fallback)
+        if not semantics:
+            print(f"No RAG rule found for '{emotion}', falling back to defaults")
+            return {}
+        
+        # Convert Phase 3 Schema → Phase 4 Palette Format
+        palette = {}
+        
+        # Color
+        if "color" in semantics:
+            colors = semantics["color"].get("palettes", [])
+            palette["primary_colors"] = [{"name": c} for c in colors]
+            palette["color_temperature"] = semantics["color"].get("temperature", "neutral")
+            
+        # Intensity
+        if "intensity" in semantics:
+            r = semantics["intensity"].get("preferred_range", [0.5, 0.5])
+            avg_int = sum(r) / len(r)
+            palette["intensity"] = {"default": int(avg_int * 100)}
+            
+        # Transitions
+        if "transitions" in semantics:
+            speed = semantics["transitions"].get("speed", "medium")
+            speed_map = {"instant": 0.1, "fast": 0.5, "medium": 2.0, "slow": 4.0}
+            duration = speed_map.get(speed, 2.0)
+            
+            pref_types = semantics["transitions"].get("preferred_types", ["fade"])
+            trans_type = pref_types[0] if pref_types else "fade"
+            
+            palette["transition"] = {"type": trans_type, "duration": duration}
+            
+        return palette
+
     def build_context_for_llm(self, emotion: str, scene_text: str) -> str:
         """
-        Adapter method for Phase 6 pipeline integration.
-        Merges auditorium and semantics retrieval into a single
-        context string suitable for LLM consumption.
-
-        Args:
-            emotion: Primary emotion (e.g. "fear", "joy", "neutral")
-            scene_text: Raw scene text for auditorium similarity search
-        Returns:
-            Formatted context string combining fixture and semantic data
+        Adapter method for Phase 4: Build a text blob for the LLM prompt.
         """
-        import json
-
-        # Retrieve from both knowledge bases using existing methods
-        fixtures = self.retrieve_auditorium_context(scene_text, k=5)
-        semantics = self.retrieve_semantics_context(emotion, "general", k=3)
-
-        context_parts = []
-
-        if fixtures:
-            context_parts.append("=== AVAILABLE FIXTURES ===")
-            for f in fixtures:
-                context_parts.append(json.dumps(f, default=str))
-
-        if semantics:
-            context_parts.append("=== LIGHTING SEMANTICS ===")
-            for s in semantics:
-                context_parts.append(json.dumps(s, default=str))
-
-        return "\n".join(context_parts) if context_parts else "No RAG context available."
-
-    def retrieve_palette(self, emotion: str) -> dict:
-        """
-        Adapter method for Phase 4 rule-based fallback.
-        Maps semantics metadata into the palette structure that
-        Phase 4's _build_group_instructions expects.
-        """
-        # Color name mapping for palette names from semantics JSON
-        COLOR_MAP = {
-            "amber": {"name": "warm_amber", "rgb": [255, 191, 0]},
-            "yellow": {"name": "yellow", "rgb": [255, 255, 0]},
-            "pink": {"name": "pink", "rgb": [255, 182, 193]},
-            "red": {"name": "deep_red", "rgb": [150, 0, 50]},
-            "orange": {"name": "orange", "rgb": [255, 140, 0]},
-            "blue": {"name": "steel_blue", "rgb": [70, 130, 180]},
-            "purple": {"name": "purple", "rgb": [128, 0, 128]},
-            "dark_blue": {"name": "dark_blue", "rgb": [0, 0, 139]},
-            "cold_white": {"name": "cold_white", "rgb": [200, 220, 255]},
-            "blackout": {"name": "blackout", "rgb": [0, 0, 0]},
-        }
-
-        SPEED_TO_DURATION = {"slow": 4.0, "medium": 2.0, "fast": 0.5}
-
-        DEFAULT_PALETTE = {
-            "primary_colors": [{"name": "white", "rgb": [255, 255, 255]}],
-            "intensity": {"default": 60},
-            "transition": {"type": "fade", "duration": 2.0},
-            "color_temperature": "neutral",
-        }
-
-        semantics = self.retrieve_semantics_context(emotion, "general", k=3)
-        if not semantics:
-            return DEFAULT_PALETTE
-
-        # Find the best matching emotion rule
-        best = None
-        for item in semantics:
-            if item.get("context_type") == "emotion" and item.get("context_value") == emotion:
-                best = item
-                break
-        if best is None:
-            best = semantics[0]
-
-        rules = best.get("rules", {})
-
-        # primary_colors
-        palette_names = rules.get("color", {}).get("palettes", [])
-        primary_colors = [COLOR_MAP[p] for p in palette_names if p in COLOR_MAP]
-        if not primary_colors:
-            primary_colors = [{"name": "white", "rgb": [255, 255, 255]}]
-
-        # intensity — convert preferred_range midpoint to 0-100 default
-        intensity_range = rules.get("intensity", {}).get("preferred_range", [0.5, 0.7])
-        intensity_default = int(((intensity_range[0] + intensity_range[1]) / 2) * 100)
-
-        # transition
-        speed = rules.get("transitions", {}).get("speed", "medium")
-        t_types = rules.get("transitions", {}).get("preferred_types", ["fade"])
-        transition_type = t_types[0] if t_types else "fade"
-        transition_duration = SPEED_TO_DURATION.get(speed, 2.0)
-
-        # color_temperature
-        color_temperature = rules.get("color", {}).get("temperature", "neutral")
-
-        return {
-            "primary_colors": primary_colors,
-            "intensity": {"default": intensity_default},
-            "transition": {"type": transition_type, "duration": transition_duration},
-            "color_temperature": color_temperature,
-        }
+        # 1. Get Semantic Rules
+        rules = self.retrieve_semantics_context(emotion, "general", k=3)
+        
+        # 2. Get Hardware Context (maybe search for keywords in scene text?)
+        fixtures = self.retrieve_auditorium_context(scene_text, k=2)
+        
+        context_lines = []
+        context_lines.append(f"--- DESIGN RULES FOR EMOTION: {emotion.upper()} ---")
+        for r in rules:
+            src = r.get('source', 'Unknown')
+            ctx = r.get('context_value', '')
+            # Flatten the rule dict for the LLM
+            context_lines.append(f"Rule ({src}): When {ctx}, use {r.get('rules', {})}")
+            
+        context_lines.append(f"\n--- AVAILABLE HARDWARE RELEVANT TO SCENE ---")
+        for f in fixtures:
+            context_lines.append(f"Fixture: {f.get('fixture_type')} at {f.get('position', 'unknown')}")
+            
+        return "\n".join(context_lines)
 
 # Singleton
 _instance = None

@@ -11,7 +11,12 @@
   "properties": {
     "context_type": {
       "type": "string",
-      "enum": ["emotion", "script_type", "scene_function", "event_phase"]
+      "enum": [
+        "emotion",
+        "script_type",
+        "scene_function",
+        "event_phase"
+      ]
     },
     "context_value": {
       "type": "string"
@@ -24,7 +29,9 @@
           "properties": {
             "preferred_range": {
               "type": "array",
-              "items": { "type": "number" },
+              "items": {
+                "type": "number"
+              },
               "minItems": 2,
               "maxItems": 2
             }
@@ -35,11 +42,17 @@
           "properties": {
             "palette": {
               "type": "array",
-              "items": { "type": "string" }
+              "items": {
+                "type": "string"
+              }
             },
             "temperature": {
               "type": "string",
-              "enum": ["warm", "neutral", "cool"]
+              "enum": [
+                "warm",
+                "neutral",
+                "cool"
+              ]
             }
           }
         },
@@ -50,7 +63,16 @@
               "type": "array",
               "items": {
                 "type": "string",
-                "enum": ["cut", "fade", "crossfade"]
+                "enum": [
+                  "fade",
+                  "snap",
+                  "smooth",
+                  "pulse",
+                  "flicker",
+                  "strobe",
+                  "cut",
+                  "crossfade"
+                ]
               }
             }
           }

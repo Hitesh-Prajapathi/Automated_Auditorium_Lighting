@@ -1,13 +1,14 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
-    "title": "Lighting Semantics Schema (Phase 3)",
-    "description": "Design tendencies and biases. No hard commands.",
+    "title": "Lighting Semantics Schema (Phase 3 - Expert Upgrade)",
+    "description": "Design tendencies, biases, and conflict resolution rules for the Dual RAG system.",
     "type": "object",
     "required": [
         "context_type",
         "context_value",
         "rules",
-        "priority"
+        "priority",
+        "source"
     ],
     "properties": {
         "context_type": {
@@ -16,19 +17,54 @@
                 "emotion",
                 "script_type",
                 "scene_function",
-                "event_phase"
+                "event_phase",
+                "technique"
             ],
             "description": "The category of context this rule applies to"
         },
         "context_value": {
             "type": "string",
-            "description": "The specific trigger (e.g., 'joy', 'formal_event')"
+            "description": "The specific trigger (e.g., 'joy', 'formal_event', 'mccandless_system')"
+        },
+        "source": {
+            "type": "string",
+            "description": "Citation for the rule (e.g., 'McCandless - A Method of Lighting the Stage')"
         },
         "priority": {
             "type": "number",
             "minimum": 0.0,
             "maximum": 1.0,
-            "description": "Weight of this semantic bias (0.0 to 1.0)"
+            "description": "Weight of this semantic bias (0.0=suggestion, 1.0=mandatory)"
+        },
+        "conflict_priority": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "default": 5,
+            "description": "Integer priority for resolving collisions. 10=Safety, 1=Subtle Accent."
+        },
+        "layer_compatibility": {
+            "type": "array",
+            "items": {
+                "type": "string",
+                "enum": [
+                    "primary",
+                    "secondary",
+                    "accent"
+                ]
+            },
+            "description": "Which layers this rule is valid for (e.g., Movement is Primary only)."
+        },
+        "blending_mode": {
+            "type": "string",
+            "enum": [
+                "override",
+                "add",
+                "multiply",
+                "average"
+            ],
+            "default": "average",
+            "description": "How this rule mixes with others. 'Override' replaces, 'Add' layers on top."
         },
         "rules": {
             "type": "object",
@@ -43,6 +79,13 @@
                             },
                             "minItems": 2,
                             "maxItems": 2
+                        },
+                        "mode": {
+                            "type": "string",
+                            "enum": [
+                                "static",
+                                "dynamic"
+                            ]
                         }
                     }
                 },
@@ -81,6 +124,56 @@
                                 "medium",
                                 "fast",
                                 "instant"
+                            ]
+                        }
+                    }
+                },
+                "gobo": {
+                    "type": "object",
+                    "properties": {
+                        "pattern": {
+                            "type": "string"
+                        },
+                        "focus": {
+                            "type": "string",
+                            "enum": [
+                                "sharp",
+                                "soft"
+                            ]
+                        },
+                        "rotation": {
+                            "type": "boolean"
+                        }
+                    }
+                },
+                "movement": {
+                    "type": "object",
+                    "properties": {
+                        "speed": {
+                            "type": "string"
+                        },
+                        "pattern": {
+                            "type": "string",
+                            "enum": [
+                                "circle",
+                                "figure8",
+                                "sweep",
+                                "ballyhoo",
+                                "static"
+                            ]
+                        }
+                    }
+                },
+                "beam_angle": {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "enum": [
+                                "narrow",
+                                "medium",
+                                "wide",
+                                "wash"
                             ]
                         }
                     }

@@ -25,8 +25,8 @@ from .errors import (
     PhaseNotImplementedError
 )
 
-# Configure logging
-logger = logging.getLogger("phase_6.pipeline")
+# Initialize logger for phase 6
+logger = logging.getLogger("phase_6")
 
 
 class PipelineRunner:
@@ -52,6 +52,7 @@ class PipelineRunner:
         """
         self.config = config or PipelineConfig()
         self.state = StateTracker()
+        self._simulation_launcher = None
     
     def run(self, script_path: str) -> PipelineResult:
         """
@@ -94,7 +95,7 @@ class PipelineRunner:
             
             # Phase 5: Simulation (OPTIONAL - log & continue)
             if self.config.enable_phase_5:
-                self._run_phase_5(lighting_instructions, result)
+                self._simulation_launcher = self._run_phase_5(lighting_instructions, result)
             else:
                 result.add_phase_result(
                     self.state.skip_phase("phase_5", "Disabled by configuration")
@@ -136,41 +137,24 @@ class PipelineRunner:
         """
         Phase 1: Script parsing & scene extraction
         REQUIRED - HARD FAIL on error
+        
+        New architecture (v2): Calls run_phase_1() which handles
+        1A (acquisition), 1B (structuring), 1C (LLM segmentation +
+        timestamps), 1D (validation), 1E (JSON construction).
         """
         self.state.start_phase("phase_1")
         logger.info("Phase 1: Starting script parsing")
         
         try:
-            # Import Phase 1 entry point
-            from phase_1 import (
-                detect_format,
-                clean_text,
-                segment_scenes,
-                generate_timestamps,
-                extract_timestamps
-            )
-            from utils import read_script
+            from phase_1 import run_phase_1
             
-            # Execute Phase 1
-            raw_text = read_script(script_path)
-            format_info = detect_format(raw_text)
-            cleaned_text = clean_text(raw_text, preserve_structure=True)
-            scenes = segment_scenes(cleaned_text, format_info)
+            scenes, metadata = run_phase_1(script_path)
             
-            # Handle timestamps
-            if format_info['timestamped']:
-                timestamps = extract_timestamps(raw_text, scenes)
-            else:
-                timestamps = generate_timestamps(scenes)
-            
-            # Enrich scenes with timestamps
-            for scene, timestamp in zip(scenes, timestamps):
-                scene["timing"] = timestamp
-            
+            # scenes is already a list of schema-valid dicts
             phase_result = self.state.complete_phase(
                 "phase_1",
                 PhaseStatus.SUCCESS,
-                output={"scene_count": len(scenes)}
+                output={"scene_count": len(scenes), **metadata}
             )
             result.add_phase_result(phase_result)
             
@@ -196,19 +180,40 @@ class PipelineRunner:
         try:
             from phase_2 import analyze_emotion
             
-            raw_content = scene.get("content", "")
-            if isinstance(raw_content, str):
-                content = raw_content
-            else:
-                content = raw_content.get("text", "")
+            # Phase 1 -> Phase 2 Strict Contract: Only pass scene_id and text
+            scene_id = scene.get("scene_id")
+            content = scene.get("text", "")
             
-            emotion_analysis = analyze_emotion(content)
-            scene["emotion"] = emotion_analysis
+            # Architectural Rule: Minimum content threshold
+            # Cinematic transitions (FADE IN, CUT TO) should not be analyzed for emotion
+            word_count = len(content.split())
+            if word_count < 4:
+                logger.info(f"Phase 2 skipped for {scene_id} - text too short ({word_count} words)")
+                scene["emotion"] = None
+                
+                phase_result = self.state.complete_phase(
+                    "phase_2",
+                    PhaseStatus.SUCCESS,
+                    output={"emotion": None, "reason": "below_word_count_threshold"}
+                )
+                result.add_phase_result(phase_result)
+                return scene
+            
+            # Conceptually Phase 2 only receives text (and scene_id)
+            emotion_analysis_full = analyze_emotion(scene)
+            
+            # Extract the actual inner emotion dict from the Phase 2 contract
+            emotion_dict = emotion_analysis_full.get("emotion")
+            
+            # Phase 2 Output Contract: Only inject the emotion dict
+            scene["emotion"] = emotion_dict
+            
+            primary_val = emotion_dict.get("primary", "neutral") if emotion_dict else "neutral"
             
             phase_result = self.state.complete_phase(
                 "phase_2",
                 PhaseStatus.SUCCESS,
-                output={"emotion": emotion_analysis.get("primary_emotion")}
+                output={"emotion": primary_val}
             )
             result.add_phase_result(phase_result)
             
@@ -216,7 +221,7 @@ class PipelineRunner:
             
         except Exception as e:
             logger.warning(f"Phase 2 failed (non-fatal): {e}")
-            scene["emotion"] = {"primary_emotion": "neutral", "confidence": 0.0}
+            scene["emotion"] = {"primary": "neutral", "confidence": 0.0}
             
             phase_result = self.state.complete_phase(
                 "phase_2",
@@ -225,7 +230,7 @@ class PipelineRunner:
             )
             result.add_phase_result(phase_result)
             
-            # Non-fatal - continue with null emotion
+            # Non-fatal - continue with neutral emotion
             return scene
     
     def _run_phase_3(self, scene: Dict, result: PipelineResult) -> str:
@@ -239,12 +244,8 @@ class PipelineRunner:
             from phase_3 import get_retriever
             
             retriever = get_retriever()
-            emotion = scene.get("emotion", {}).get("primary_emotion", "neutral")
-            raw_content = scene.get("content", "")
-            if isinstance(raw_content, str):
-                scene_text = raw_content
-            else:
-                scene_text = raw_content.get("text", "")
+            emotion = scene.get("emotion", {}).get("primary_emotion", "neutral") if scene.get("emotion") else "neutral"
+            scene_text = scene.get("text", "")
             
             context = retriever.build_context_for_llm(emotion, scene_text)
             
@@ -318,25 +319,28 @@ class PipelineRunner:
         self, 
         lighting_instructions: List[Dict], 
         result: PipelineResult
-    ) -> None:
+    ) -> Optional[Any]:
         """
         Phase 5: Simulation & visualization
         OPTIONAL - NON-FATAL, log & continue
+        
+        Returns:
+            SimulationLauncher instance if successful, None otherwise.
         """
         self.state.start_phase("phase_5")
         
         try:
-            # Phase 5 entry point - visualization
-            from phase_5 import playback_engine
+            from phase_5.server import launch_simulation
             
-            # Phase 5 handles its own rendering
-            # Phase 6 does NOT interpret visualization output
+            # Launch the external simulation with real pipeline data
+            launcher = launch_simulation(lighting_instructions)
             
             phase_result = self.state.complete_phase(
                 "phase_5",
                 PhaseStatus.SUCCESS
             )
             result.add_phase_result(phase_result)
+            return launcher
             
         except ImportError:
             logger.warning("Phase 5 not available - skipping")
@@ -356,6 +360,8 @@ class PipelineRunner:
             )
             result.add_phase_result(phase_result)
             # Non-fatal - continue
+        
+        return None
     
     def _run_phase_7(
         self, 
@@ -364,16 +370,16 @@ class PipelineRunner:
         result: PipelineResult
     ) -> None:
         """
-        Phase 7: Logging & evaluation
+        Phase 7: Logging, evaluation & v2 quality gate
         OPTIONAL - NON-FATAL, log & continue
         """
         self.state.start_phase("phase_7")
         
         try:
             from pathlib import Path
-            from phase_7 import TraceLogger, MetricsEngine
+            from phase_7 import TraceLogger, MetricsEngine, EvaluationGate
             
-            # --- Trace Logging ---
+            # --- Layer 1: Trace Logging ---
             trace_logger = TraceLogger(output_dir=Path("data/traces/"), seed=42)
             for scene, instruction in zip(processed_scenes, lighting_instructions):
                 trace_logger.log_decision(scene, instruction)
@@ -381,20 +387,63 @@ class PipelineRunner:
             logger.info(f"Phase 7: Trace saved to {trace_file}")
             print(f"📝 Trace saved: {trace_file} ({trace_logger.get_entry_count()} entries)")
             
-            # --- Metrics ---
+            # --- Layer 2: Metrics Engine (v1) ---
             available_groups = {"front_wash", "back_light", "side_fill", "specials", "ambient"}
             metrics_engine = MetricsEngine(available_groups=available_groups)
-            report = metrics_engine.generate_report(lighting_instructions)
+            metrics_report = metrics_engine.generate_report(lighting_instructions)
             
-            # Print summary
+            # Print v1 summary
             print(f"📊 Metrics Report:")
-            print(f"   Scenes:    {report['summary']['num_instructions']}")
-            seq = report.get('sequence_metrics', {})
+            print(f"   Scenes:    {metrics_report['summary']['num_instructions']}")
+            seq = metrics_report.get('sequence_metrics', {})
             print(f"   Drift:     {seq.get('drift_score', 'N/A')}")
-            for im in report.get('instruction_metrics', []):
+            for im in metrics_report.get('instruction_metrics', []):
                 cov = im.get('coverage', {})
                 div = im.get('diversity', {})
                 print(f"   Scene {im.get('scene_id', '?')}: coverage={cov}, diversity={div}")
+            
+            # --- Layer 3: Evaluation Gate (v2) ---
+            # Phase 2 natively outputs {"primary": x, "primary_confidence": y, ...}
+            # which matches what EvaluationGate needs (as `emotion_dists` mapped below)
+            emotion_dists = []
+            for s in processed_scenes:
+                e = s.get("emotion")
+                if e:
+                    # Map the strict Phase 2 JSON to EvaluationGate format
+                    emotion_dists.append({
+                        "primary_emotion": e.get("primary", "neutral"),
+                        "primary_weight": e.get("primary_confidence", 1.0),
+                        "primary_score": e.get("primary_confidence", 1.0),
+                        "accent_emotions": [
+                            {"emotion": e.get("secondary"), "weight": e.get("secondary_confidence", 0.0)},
+                            {"emotion": e.get("accent"), "weight": e.get("accent_confidence", 0.0)}
+                        ]
+                    })
+                else:
+                    emotion_dists.append({
+                        "primary_emotion": "neutral",
+                        "primary_weight": 1.0,
+                        "primary_score": 1.0,
+                        "accent_emotions": []
+                    })
+            
+            gate = EvaluationGate(output_dir="data/evaluations/")
+            eval_report = gate.evaluate_pipeline(
+                instructions=lighting_instructions,
+                emotion_dists=emotion_dists,
+            )
+            
+            # Print v2 verdict
+            can_proceed = gate.should_proceed(eval_report)
+            summary = gate.get_verdict_summary(eval_report)
+            print(f"\n🔍 Evaluation Gate:")
+            print(summary)
+            
+            if not can_proceed:
+                logger.warning("Phase 7: Evaluation gate recommends review — pipeline continues (non-blocking)")
+                print("   ⚠️  Gate: REVIEW RECOMMENDED (non-blocking)")
+            else:
+                print("   ✅ Gate: PASSED")
             
             phase_result = self.state.complete_phase(
                 "phase_7",
@@ -402,7 +451,8 @@ class PipelineRunner:
                 output={
                     "trace_file": str(trace_file),
                     "entries": trace_logger.get_entry_count(),
-                    "drift_score": seq.get('drift_score')
+                    "drift_score": seq.get('drift_score'),
+                    "gate_passed": can_proceed,
                 }
             )
             result.add_phase_result(phase_result)

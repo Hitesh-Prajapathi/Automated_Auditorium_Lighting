@@ -1,8 +1,6 @@
 """
 Phase 5: Simulation/Visualization Module
-Visual execution of lighting intent.
-
-Now powered by the External Simulation Prototype (High-Fidelity Digital Twin).
+Visual execution of lighting intent
 """
 
 from .color_utils import *

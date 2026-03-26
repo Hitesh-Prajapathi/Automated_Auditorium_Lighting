@@ -30,8 +30,7 @@ EMOTION_CATEGORIES = [
 # SCENE DETECTION KEYWORDS
 # ============================================================================
 SCENE_MARKERS = [
-    "INT.", "EXT.", "FADE IN", "FADE OUT", "CUT TO", 
-    "SCENE", "ACT", "INTERIOR", "EXTERIOR"
+    "INT.", "EXT.", "INTERIOR", "EXTERIOR"
 ]
 
 # ============================================================================
@@ -82,6 +81,41 @@ ARTNET_IP = "192.168.1.100"  # IP of Avolites Titan console
 ARTNET_PORT = 6454  # Standard Art-Net port
 
 # ============================================================================
+# 🆕 PHASE 1 — TEXT ACQUISITION & STRUCTURING
+# ============================================================================
+OCR_CONFIDENCE_THRESHOLD = 0.85       # Min OCR confidence to proceed
+OCR_PROVIDER = "mistral"              # "mistral" or "none"
+OCR_AVG_LINE_LENGTH_MIN = 10          # OCR quality gate: min avg line length
+OCR_AVG_LINE_LENGTH_MAX = 500         # OCR quality gate: max avg line length
+OCR_NOISE_RATIO_MAX = 0.05            # OCR quality gate: max non-printable ratio
+
+# Phase 1C — LLM Scene Segmentation
+PHASE1_LLM_MODEL = "Qwen/Qwen2.5-7B-Instruct"  # Local HuggingFace model
+PHASE1_LLM_TEMPERATURE = 0.0          # Deterministic
+PHASE1_LLM_MAX_RETRIES = 1            # Retry once on failure
+PHASE1_LLM_MAX_NEW_TOKENS = 2048      # Max generation tokens
+
+# Chunking
+CHUNK_MAX_LINES = 150                  # Max lines per chunk for LLM
+CHUNK_OVERLAP_LINES = 10              # Overlap between adjacent chunks
+
+# Phase 1D Validation
+SCENE_GAP_TOLERANCE_LINES = 2         # Max allowed gap between scenes
+SCENE_COVERAGE_THRESHOLD = 0.80       # Min non-blank line coverage
+TIMESTAMP_MAX_JUMP_SECONDS = 1800     # 30 min max jump between scenes
+
+# ============================================================================
+# 🆕 EVENT PROCESSING — College Event Fast-Path
+# ============================================================================
+EVENT_DETECTION_KEYWORD_THRESHOLD = 0.02    # Min keyword density to trigger
+EVENT_DETECTION_STRUCTURAL_MIN = 2          # Min structural pattern count
+EVENT_DETECTION_CONFIDENCE_MIN = 0.6        # Below this → standard pipeline
+EVENT_LLM_REFINEMENT_ENABLED = True         # Optional LLM refinement step
+EVENT_LLM_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"  # Lightweight refinement model
+EVENT_LLM_TEMPERATURE = 0.0                 # Deterministic
+EVENT_LLM_MAX_TOKENS = 512                  # Hard cap on response
+
+# ============================================================================
 # 🆕 VALIDATION
 # ============================================================================
 STRICT_VALIDATION = True  # Reject invalid cues
@@ -105,3 +139,11 @@ LIGHTKEY_FIXTURE_MAPPING = {
     "PAR_2": 2,        # PAR_2 → LightKey Fixture #2
     "MovingHead_1": 3, # etc.
 }
+
+# ============================================================================
+# 🆕 NARRATIVE MEMORY SYSTEM
+# ============================================================================
+NARRATIVE_CONTEXT_ENABLED = True          # Master switch for narrative memory
+NARRATIVE_CONTEXT_MAX_WORDS = 400         # Max words for global narrative summary
+NARRATIVE_CONTEXT_LLM_MODEL = "Qwen/Qwen2.5-7B-Instruct"  # Reuse Phase 1 model
+NARRATIVE_SLIDING_WINDOW_SIZE = 1         # How many previous scenes to include (1 = just previous)

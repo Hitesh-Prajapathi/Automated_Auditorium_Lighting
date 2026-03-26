@@ -51,19 +51,87 @@ def create_fixture_documents(fixtures: List[Dict]) -> List[Document]:
     return docs
 
 def create_semantics_documents(semantics: List[Dict]) -> List[Document]:
-    """Convert semantics JSON into LangChain Documents"""
+    """Convert semantics JSON into LangChain Documents.
+    
+    IMPORTANT: The page_content must be highly discriminative so that 
+    FAISS similarity search for 'fear' matches the fear document, 
+    not anger or neutral. We repeat the emotion/context keyword prominently.
+    """
     docs = []
     for rule in semantics:
-        # Create descriptive text for embedding
-        # "Design rule for Fear emotion: Low intensity, cool colors"
         context_type = rule.get("context_type")
         context_value = rule.get("context_value")
-        comment = rule.get("_comment", "")
+        source = rule.get("source", "Unknown")
+        blending = rule.get("blending_mode", "average")
         
-        content = (
-            f"Context: {context_type} = {context_value}. "
-            f"Description: {comment}"
-        )
+        # Build a rich, discriminative description
+        rules_obj = rule.get("rules", {})
+        desc_parts = []
+        
+        if "color" in rules_obj:
+            c = rules_obj["color"]
+            pal = ", ".join(c.get("palettes", []))
+            temp = c.get('temperature', '')
+            desc_parts.append(f"Use {temp} colors: {pal}")
+            
+        if "intensity" in rules_obj:
+            i = rules_obj["intensity"]
+            r = i.get('preferred_range', [])
+            if r:
+                low_pct = int(r[0] * 100)
+                high_pct = int(r[1] * 100)
+                desc_parts.append(f"Intensity {low_pct}% to {high_pct}%")
+            
+        if "transitions" in rules_obj:
+            t = rules_obj["transitions"]
+            speed = t.get('speed', 'medium')
+            types = ", ".join(t.get('preferred_types', []))
+            desc_parts.append(f"{speed} {types} transition")
+
+        if "gobo" in rules_obj:
+            g = rules_obj["gobo"]
+            desc_parts.append(f"Gobo pattern: {g.get('pattern', '')}")
+            
+        if "movement" in rules_obj:
+            m = rules_obj["movement"]
+            desc_parts.append(f"Movement: {m.get('pattern', '')} at {m.get('speed', '')} speed")
+
+        if "beam_angle" in rules_obj:
+            b = rules_obj["beam_angle"]
+            desc_parts.append(f"Beam angle: {b.get('type', '')}")
+
+        rule_desc = ". ".join(desc_parts)
+        
+        # === KEY FIX: Repeat the context value prominently to anchor the embedding ===
+        # For "emotion = joy", we want the document to strongly match queries containing "joy"
+        if context_type == "emotion":
+            content = (
+                f"Lighting design for {context_value} emotion. "
+                f"When the scene emotion is {context_value}, "
+                f"{rule_desc}. "
+                f"Source: {source}. "
+                f"This rule applies to {context_value} scenes with {blending} blending."
+            )
+        elif context_type == "scene_function":
+            content = (
+                f"Lighting for {context_value} scene function. "
+                f"When the scene is {context_value}, "
+                f"{rule_desc}. "
+                f"Source: {source}."
+            )
+        elif context_type == "script_type":
+            content = (
+                f"Lighting for {context_value} script type. "
+                f"When the script is a {context_value}, "
+                f"{rule_desc}. "
+                f"Source: {source}."
+            )
+        else:
+            content = (
+                f"Lighting technique: {context_value}. "
+                f"{rule_desc}. "
+                f"Source: {source}."
+            )
         
         metadata = rule
         docs.append(Document(page_content=content, metadata=metadata))

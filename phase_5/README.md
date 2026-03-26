@@ -1,49 +1,93 @@
-# Phase 5 — Simulation & Visualization
+# 🎬 PHASE 5: Simulation & Visualization
+**"The Lighting Playback Engine"**
 
-> Reflects `baseline-rule-engine-stable` tag. Last updated: 2026-02-18.
+* **Status**: ✅ COMPLETED  
+* **Owner**: Friend A  
+* **Version**: 1.0 (Demo Ready)
 
-## Purpose
+---
 
-Phase 5 renders lighting instructions into a **High-Fidelity 3D Simulation**. 
-It acts as a **bridge** to the **External Simulation Prototype**, translating abstract Phase 4 instructions into physical fixture commands and launching the sophisticated Three.js visualization.
+## 🚀 Executive Summary
+Phase 5 is the **Visual Output Layer** of the Automated Auditorium Lighting system. It takes the abstract "Lighting Intent" (decisions made by Phase 4) and turns them into a convincing, time-based 3D visualization.
 
-## Components
+It is designed to be **dumb, fast, and beautiful**. It does not make decisions; it simply executes orders with perfect timing.
 
-| File | Component | Description |
-|------|-----------|-------------|
-| `server.py` | `SimulationLauncher` | Exports data & launches the External Prototype (WebSocket Backend + HTTP Frontend) |
-| `threejs_adapter.py` | `InstructionExporter` | Translates Phase 4 data (groups, semantic colors) to Prototype format |
-| `playback_engine.py` | `PlaybackEngine` | *Legacy compatibility for Phase 6 pipeline* |
-| `scene_renderer.py` | `SceneRenderer` | *Legacy compatibility* |
-| `color_utils.py` | Color utilities | Used by Exporter for semantic color resolution |
-| `__init__.py` | Module exports | Exposes `launch_simulation` |
+---
 
-## Inputs / Outputs
+## 🕹️ Quick Start (Run the Demo)
 
-- **Input**: `List[LightingInstruction]` dicts from Phase 4
-- **Output**: 
-    - JSON file export to `external_prototype/data/lighting_instructions.json`
-    - Live 3D Simulation via External Prototype (localhost:8081)
+1. **Install Dependencies** (if not already done):
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-## How to Run
+2. **Start the Playback Server**:
+   ```bash
+   python3 -m phase_5.server
+   ```
 
-```bash
-conda activate venv_ALG_311
-cd Automated_Auditorium_Lighting
-python -m phase_5.server
+3. **Open Visualization**:
+   Go to `http://localhost:8000` in your browser.
+
+   * **Play**: Starts the timeline.
+   * **Pause**: Freezes time (lights hold state).
+   * **Seek**: Click the timeline bar to jump.
+
+---
+
+## 🏗️ Architecture & Modules
+
+The system uses a strict **Unidirectional Data Flow**:
+
+```mermaid
+Phase 4 (JSON) → Playback Engine → Scene Renderer → Adapter → WebSocket → Three.js
 ```
 
-This will:
-1. Export instructions (defaults to a demo script if none provided)
-2. Start the **External Prototype Backend** (WebSocket on port 8765)
-3. Start the **Visual Frontend** (HTTP on port 8081)
+### 1. 🧠 Playback Engine (`playback_engine.py`)
+*   **Role**: The Timeline Controller.
+*   **Duty**: Manages `start_time`, `elapsed_time`, and transitions.
+*   **Transition Logic**: Strictly **Linear Interpolation**. No magic curves.
+*   **Guardrail**: Assumes all inputs are **valid**. Does not validate schema.
 
-## Boundaries
+### 2. 🎨 Scene Renderer (`scene_renderer.py`)
+*   **Role**: The State Keeper.
+*   **Duty**: Knows the *current* intensity and color of every group.
+*   **Feature**: Pause-safe. You can query it 100 times a second and it just reports `now`.
+*   **Logic**: "Dumb" container. Doesn't know about time, only "this light is 50%".
 
-- Phase 5 does **NOT** contain the simulation logic itself (that lives in `external_prototype/`)
-- Phase 5 does **NOT** modify lighting instructions (only translates format)
-- Phase 5 does **NOT** call LLMs
+### 3. 🔌 Three.js Adapter (`threejs_adapter.py`)
+*   **Role**: The Translator.
+*   **Duty**: Converts logical groups (`front_wash`) into virtual 3D coordinates (`x:0, y:10, z:5`).
+*   **Disclaimer**: **Positions are illustrative only.** They do not represent the real physical auditorium (Phase 3).
 
-## Failure Handling
+### 4. 🎭 Color Utilities (`color_utils.py`)
+*   **Role**: The Interpreter.
+*   **Duty**: Maps semantic words (`warm_amber`, `cool_blue`) to hex codes (`#FFB347`, `#4A90E2`).
+*   **Polish**: Ensures the demo looks premium, avoiding generic RGB colors.
 
-Phase 5 is **OPTIONAL**. If the external prototype cannot be launched (e.g., missing files), it logs a warning and the pipeline continues without visualization.
+### 5. 📡 Server & Frontend (`server.py` & `static/index.html`)
+*   **Server**: FastAPI + WebSocket. Beams state at **Max 30fps**.
+*   **Frontend**: Three.js WebGL renderer. using Volumetric Spotlights for realistic beam effects.
+
+---
+
+## 🛡️ "Rules of Engagement" (For Friend A)
+
+1. **No AI Here**: Phase 5 never calls an LLM or RAG. It strictly renders JSON.
+2. **No Hardware**: Phase 5 never outputs DMX or OSC. That is Phase 8.
+3. **No Fixing**: If Phase 4 says "Make it dark," Phase 5 makes it dark. It does not "improve" bad designs.
+4. **Valid Inputs Only**: Phase 5 crashes (gracefully) on bad input. Validation belongs upstream.
+
+---
+
+## 🔗 How to Connect Phase 4 (Next Steps)
+
+Currently, the server runs on `DEMO_DATA` defined in `server.py`.
+
+**To switch to Real AI Mode:**
+1. Import `server.py` in the Phase 6 Orchestrator.
+2. Call `engine.load_instructions(real_phase_4_json)`.
+3. The demo will instantly visualize the AI's output.
+
+---
+*Generated by Antigravity (Phase 5 Architect)*
