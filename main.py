@@ -1,33 +1,32 @@
 """
-Main pipeline orchestration script
+Main pipeline orchestration script (CLI)
 Supports: .txt, .pdf, .docx files
+
+Uses the consolidated run_phase_1() entry point for all Phase 1 processing,
+then runs Phase 2 (Emotion Analysis via V3 Multi-Head + Graph RAG) and
+Phase 4 (Lighting Design via V3 Override Hierarchy).
 """
 
 import sys
 import os
+import json
 from pathlib import Path
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-# Phase 1: Parsing
-from phase_1 import (
-    detect_format,
-    clean_text,
-    extract_stage_directions,
-    segment_scenes,
-    generate_timestamps,
-    extract_timestamps,
-    build_scene_json,
-    build_complete_output
-)
+# Phase 1: Consolidated entry point
+from phase_1 import run_phase_1
 
-# Phase 2: Emotion Analysis
-from phase_2 import analyze_emotion
+# Phase 2: Emotion Analysis (V3 Multi-Head + Graph RAG)
+from phase_2 import analyze_emotion, analyze_all_scenes
+from phase_2.graph_rag import build_scene_graph, retrieve_emotion_context
+
+# Phase 4: Lighting Decision Engine
+from phase_4.lighting_decision_engine import LightingDecisionEngine
 
 # Utils
 from utils import (
-    read_script,
     save_output,
     ensure_directories,
     get_output_path,
@@ -55,8 +54,10 @@ def validate_input_file(filepath):
     if not os.path.exists(filepath):
         return False, f"File not found: {filepath}"
     
-    file_info = get_file_info(filepath)
-    format_info = file_info.get("format_info", {})
+    if os.path.getsize(filepath) == 0:
+        return False, "File is empty"
+    
+    format_info = detect_file_format(filepath)
     
     if not format_info.get("supported"):
         ext = format_info.get("extension", "unknown")
@@ -73,8 +74,9 @@ def validate_input_file(filepath):
 
 def process_script(input_file, output_file=None):
     """
-    Main pipeline to process script from input to JSON output
-    Supports: .txt, .pdf, .docx
+    Main pipeline to process script from input to JSON output.
+    Uses the consolidated run_phase_1() + Phase 2 + Phase 4 pipeline
+    with Narrative Memory sliding window context.
     
     Args:
         input_file (str): Path to input script file
@@ -83,7 +85,7 @@ def process_script(input_file, output_file=None):
     Returns:
         dict: Processed output data
     """
-    total_steps = 10
+    total_steps = 6
     
     print("\n" + "="*70)
     print("🎭 AUTOMATED AUDITORIUM LIGHTING - SCRIPT PROCESSOR")
@@ -101,74 +103,76 @@ def process_script(input_file, output_file=None):
     print(f"   ✓ Format: {file_info['extension'].upper()}")
     print(f"   ✓ Size: {file_info['size']}")
     
-    # Step 1: Read input
-    print_step(1, total_steps, f"Reading {file_info['extension'].upper()} file...")
+    # =========================================================================
+    # Step 1: Phase 1 — Full Script Processing (1A → 1E)
+    # =========================================================================
+    print_step(1, total_steps, "Running Phase 1 (Script → Scene Structure)...")
     try:
-        raw_text = read_script(input_file)
-        print(f"   ✓ Extracted {len(raw_text)} characters")
+        scenes, metadata = run_phase_1(input_file)
+        print(f"   ✓ Segmented into {len(scenes)} scenes")
+        print(f"   ✓ Hash: {metadata.get('sha256_hash', 'N/A')[:16]}...")
     except Exception as e:
-        print(f"   ✗ Error reading file: {e}")
+        print(f"   ✗ Phase 1 failed: {e}")
+        import traceback
+        traceback.print_exc()
         return None
     
-    # Step 2: Format Detection
-    print_step(2, total_steps, "Detecting script format...")
-    format_info = detect_format(raw_text)
-    print(f"   ✓ Script type: {format_info['estimated_format']}")
-    if format_info['timestamped']:
-        print(f"   ✓ Timestamps detected")
-    if format_info['screenplay']:
-        print(f"   ✓ Screenplay structure detected")
-    
-    # Step 3: Text Cleaning
-    print_step(3, total_steps, "Cleaning and preprocessing text...")
-    cleaned_text = clean_text(raw_text, preserve_structure=True)
-    stage_directions = extract_stage_directions(raw_text)
-    print(f"   ✓ Cleaned {len(cleaned_text)} characters")
-    if stage_directions:
-        print(f"   ✓ Found {len(stage_directions)} stage directions")
-    
-    # Step 4: Scene Segmentation
-    print_step(4, total_steps, "Segmenting into scenes...")
-    scenes = segment_scenes(cleaned_text, format_info)
-    print(f"   ✓ Segmented into {len(scenes)} scenes")
-    if scenes:
-        avg_words = sum(len(s.get("content", "").split()) for s in scenes) / len(scenes)
-        print(f"   ✓ Average scene length: {avg_words:.0f} words")
-    
-    # Step 5: Timestamp Handling
-    print_step(5, total_steps, "Processing timestamps...")
-    if format_info['timestamped']:
-        timestamps = extract_timestamps(raw_text, scenes)
-        print(f"   ✓ Extracted timestamps from script")
-    else:
-        timestamps = generate_timestamps(scenes)
-        print(f"   ✓ Generated timestamps based on word count")
-    
-    # Step 6: Emotion Analysis
-    print_step(6, total_steps, "Analyzing emotions...")
-    scene_data = []
+    # =========================================================================
+    # Step 2: Phase 2 — Emotion Analysis (V3 Multi-Head + Graph RAG)
+    # =========================================================================
+    print_step(2, total_steps, "Analyzing emotions (V3 Multi-Head + Graph RAG)...")
     emotion_summary = {}
     
-    for i, (scene, timestamp) in enumerate(zip(scenes, timestamps)):
-        if VERBOSE_OUTPUT:
-            progress = f"({i+1}/{len(scenes)})"
-            print(f"   Analyzing scene {progress}...", end='\r')
-        
-        emotion_analysis = analyze_emotion(scene.get("content", ""))
+    # Build full script text for V3 full-script analysis
+    full_script_text = "\n\n".join(
+        scene.get("text", "") or scene.get("content", {}).get("text", "")
+        for scene in scenes
+    )
+    
+    # Try V3 full-script analysis first
+    try:
+        analyzed_scenes = analyze_all_scenes(full_script_text, scenes)
+        print(f"   ✓ V3 Multi-Head analysis complete")
+    except Exception as e:
+        print(f"   ⚠ V3 analysis failed ({e}), falling back to per-scene analysis")
+        analyzed_scenes = []
+        for scene in scenes:
+            result = analyze_emotion(scene)
+            analyzed_scenes.append(result)
+    
+    # Apply emotion results to scenes
+    for i, scene in enumerate(scenes):
+        if i < len(analyzed_scenes):
+            emo_result = analyzed_scenes[i]
+            if isinstance(emo_result, dict):
+                scene["emotion"] = emo_result.get("emotion", emo_result)
+                # Preserve v3_metrics for Phase 4 V3 Override Hierarchy
+                if "v3_metrics" in emo_result:
+                    scene["v3_metrics"] = emo_result["v3_metrics"]
+            else:
+                scene["emotion"] = None
+        else:
+            scene["emotion"] = None
         
         # Track emotion distribution
-        primary = emotion_analysis["primary_emotion"]
+        emo = scene.get("emotion")
+        if isinstance(emo, dict):
+            primary = emo.get("primary", emo.get("primary_emotion", "neutral"))
+        elif isinstance(emo, str):
+            primary = emo
+        else:
+            primary = "neutral"
         emotion_summary[primary] = emotion_summary.get(primary, 0) + 1
-        
-        scene_json = build_scene_json(
-            scene_id=f"scene_{i+1:03d}",
-            scene_data=scene,
-            timestamp=timestamp,
-            emotion_analysis=emotion_analysis
-        )
-        scene_data.append(scene_json)
     
-    print(f"   ✓ Analyzed {len(scenes)} scenes                    ")
+    # Build Graph RAG scene graph for cross-scene context
+    try:
+        scene_graph = build_scene_graph(scenes)
+        print(f"   ✓ Graph RAG: scene graph built ({len(scenes)} nodes)")
+    except Exception as e:
+        scene_graph = None
+        print(f"   ⚠ Graph RAG failed ({e}), continuing without")
+    
+    print(f"   ✓ Analyzed {len(scenes)} scenes")
     
     # Display emotion distribution
     if emotion_summary:
@@ -177,33 +181,103 @@ def process_script(input_file, output_file=None):
             percentage = (count / len(scenes)) * 100
             print(f"      - {emotion}: {count} scenes ({percentage:.1f}%)")
     
-    # Step 7: Genre Classification (Simple version based on emotions)
-    print_step(7, total_steps, "Determining genre...")
-    dominant_emotion = max(emotion_summary.items(), key=lambda x: x[1])[0] if emotion_summary else "neutral"
+    # Genre classification — exclude neutral from dominant emotion
+    non_neutral = {k: v for k, v in emotion_summary.items() if k != "neutral"}
+    if non_neutral:
+        dominant_emotion = max(non_neutral.items(), key=lambda x: x[1])[0]
+    else:
+        dominant_emotion = "neutral"
+    
     genre_map = {
-        "joy": "comedy",
-        "sadness": "drama",
-        "fear": "thriller",
-        "anger": "drama",
-        "surprise": "adventure",
-        "neutral": "drama"
+        "joy": "comedy", "sadness": "drama", "fear": "thriller",
+        "anger": "drama", "surprise": "adventure", "neutral": "drama",
+        "nostalgia": "drama", "mystery": "thriller", "romantic": "romance",
+        "anticipation": "thriller", "hope": "drama", "triumph": "adventure",
+        "tension": "thriller", "despair": "drama", "serenity": "drama",
+        "confusion": "mystery", "awe": "fantasy", "jealousy": "drama",
+        "chaotic_energy": "comedy", "comedic_energy": "comedy",
+        "amusement": "comedy", "excitement": "adventure"
     }
     genre = genre_map.get(dominant_emotion, "drama")
-    print(f"   ✓ Genre: {genre}")
+    print(f"   ✓ Genre: {genre} (dominant: {dominant_emotion})")
     
-    # Step 8: Build Final Output
-    print_step(8, total_steps, "Building output JSON...")
-    output = build_complete_output(scene_data, {
-        "format": format_info['estimated_format'],
-        "genre": genre,
-        "source": os.path.basename(input_file),
-        "source_format": file_info['extension'],
-        "stage_directions_found": len(stage_directions),
-        "complexity": format_info.get('complexity', 'unknown')
-    })
+    # =========================================================================
+    # Step 3: Phase 4 — Lighting Design (V3 Override Hierarchy)
+    # =========================================================================
+    print_step(3, total_steps, "Generating lighting instructions (V3 Override Hierarchy)...")
     
-    # Step 9: Save Output
-    print_step(9, total_steps, "Saving output...")
+    use_llm = bool(os.environ.get("OPENAI_API_KEY") or os.environ.get("GROQ_API_KEY"))
+    
+    try:
+        engine = LightingDecisionEngine(use_llm=use_llm)
+    except Exception as e:
+        print(f"   ⚠ LLM engine init failed ({e}), falling back to rule-based")
+        engine = LightingDecisionEngine(use_llm=False)
+    
+    lighting_cues = []
+    
+    for i, scene in enumerate(scenes):
+        if VERBOSE_OUTPUT:
+            progress = f"({i+1}/{len(scenes)})"
+            print(f"   Designing cue {progress}...", end='\r')
+        
+        # Prepare scene data for Phase 4 — pass emotion + v3_metrics for Override Hierarchy
+        scene_emotion = scene.get("emotion", {}) or {}
+        scene_data = {
+            "scene_id": scene.get("scene_id", f"scene_{i+1:03d}"),
+            "emotion": {
+                "primary_emotion": scene_emotion.get("primary", scene_emotion.get("primary_emotion", "neutral")),
+                "energy_level": scene_emotion.get("energy_level", 0.5),
+                "valence": scene_emotion.get("valence", 0.0)
+            },
+            "content": {"text": scene.get("text", "")},
+            "timing": {
+                "start_time": scene.get("start_time", scene.get("time_window", {}).get("start", 0)),
+                "end_time": scene.get("end_time", scene.get("time_window", {}).get("end", 0)),
+                "duration": scene.get("duration", 0),
+            },
+            "doc_type": "theatrical_script",
+            "v3_metrics": scene.get("v3_metrics", {}),
+        }
+        
+        instruction = engine.generate_instruction(scene_data)
+        
+        instruction_dict = instruction.dict()
+        lighting_cues.append(instruction_dict)
+    
+    print(f"   ✓ Generated {len(lighting_cues)} lighting cues                    ")
+    
+    # =========================================================================
+    # Step 4: Build Final Output
+    # =========================================================================
+    print_step(4, total_steps, "Building output JSON...")
+    
+    # Calculate total duration
+    total_duration = 0
+    for scene in scenes:
+        total_duration += scene.get("duration", 0) or 0
+    
+    hours = int(total_duration // 3600)
+    minutes = int((total_duration % 3600) // 60)
+    seconds = int(total_duration % 60)
+    duration_formatted = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    
+    output = {
+        "metadata": {
+            "source_file": os.path.basename(input_file),
+            "source_format": file_info['extension'],
+            "genre": genre,
+            "total_scenes": len(scenes),
+            "total_duration_formatted": duration_formatted,
+            "dominant_emotion": dominant_emotion,
+            "emotion_distribution": emotion_summary,
+        },
+        "scenes": scenes,
+        "lighting_instructions": lighting_cues
+    }
+    
+    # Step 5: Save Output
+    print_step(5, total_steps, "Saving output...")
     if output_file is None:
         output_file = get_output_path(input_file)
     
@@ -223,8 +297,8 @@ def process_script(input_file, output_file=None):
     print(f"\n📊 Summary:")
     print(f"   • Input file: {os.path.basename(input_file)} ({file_info['extension'].upper()})")
     print(f"   • Total scenes: {len(scenes)}")
-    print(f"   • Total duration: {output['metadata']['total_duration_formatted']}")
-    print(f"   • Dominant emotion: {output['metadata']['emotion_distribution']['dominant_emotion']}")
+    print(f"   • Total duration: {duration_formatted}")
+    print(f"   • Dominant emotion: {dominant_emotion}")
     print(f"   • Genre: {genre}")
     print(f"   • Output file: {os.path.basename(saved_path)}")
     print(f"\n🎯 Next steps:")

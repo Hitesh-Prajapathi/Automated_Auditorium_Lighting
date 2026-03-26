@@ -21,12 +21,16 @@
         "raw_drama",
         "event_schedule",
         "cue_sheet",
-        "mixed"
+        "mixed",
+        "college_event"
       ]
     },
     "time_window": {
       "type": "object",
-      "required": ["start", "end"],
+      "required": [
+        "start",
+        "end"
+      ],
       "properties": {
         "start": {
           "type": "number",
@@ -39,7 +43,10 @@
       }
     },
     "location": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "Optional location or stage area"
     },
     "text": {
@@ -47,18 +54,54 @@
       "description": "Raw scene text used for downstream analysis"
     },
     "emotion": {
-      "type": ["object", "null"],
-      "description": "Optional emotion enrichment (Phase 2)",
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Optional emotion enrichment (Phase 2). Supports up to 3 layers: primary, secondary, accent.",
       "properties": {
-        "primary": { "type": "string" },
-        "secondary": { "type": ["string", "null"] },
-        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        "primary": {
+          "type": "string",
+          "description": "Dominant emotion driving lighting decisions"
+        },
+        "secondary": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Supporting emotion for blended lighting"
+        },
+        "accent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Subtle tertiary emotion for nuanced cues"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
       }
     },
     "explicit_lighting": {
       "type": "array",
       "description": "Verbatim lighting instructions explicitly mentioned in the script",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
+    },
+    "duration": {
+      "type": "number",
+      "description": "Scene duration in seconds"
+    },
+    "chunk_summary": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Optional dramatic summary of the chunk this scene belongs to (Phase 1C Narrative Memory)"
     }
   },
   "additionalProperties": false

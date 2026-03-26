@@ -1,122 +1,78 @@
 """
-Trace logger for Phase 7.
-Observes and logs execution traces WITHOUT influencing execution.
-
-IMPORTANT: This logger is PASSIVE — it does not:
-- Call Phase 4 functions
-- Invoke LLM
-- Modify lighting intent
+Phase 7 — Trace Logger
+Logs input/output traces per scene for evaluation and reproducibility.
 """
+
+import os
 import json
 import hashlib
-from datetime import datetime
-from uuid import uuid4
-from pathlib import Path
-from typing import Optional, List
-
-from .schemas import TraceEntry, TraceLog, RAGContextRef
+import time
+import uuid
+from typing import Dict, List, Optional
 
 
 class TraceLogger:
-    """
-    Logs execution traces for reproducibility and metrics.
+    """Logs decision traces for each scene through the pipeline."""
     
-    This logger observes pre-generated outputs and creates trace
-    records for analysis. It NEVER generates or modifies data.
-    
-    Usage:
-        logger = TraceLogger(output_dir=Path("traces/"), seed=42)
-        
-        # Load pre-generated data (not generated here!)
-        with open("data/lighting_cues/scene_001.json") as f:
-            instruction = json.load(f)
-        
-        logger.log_decision(scene, instruction)
-        logger.save()
-    """
-    
-    def __init__(self, output_dir: Path, seed: Optional[int] = None):
-        """
-        Initialize trace logger.
-        
-        Args:
-            output_dir: Directory to save trace logs
-            seed: Optional seed for reproducibility tracking
-        """
-        self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.run_id = uuid4()
+    def __init__(self, output_dir: str = "data/traces", seed: int = 42):
+        self.output_dir = output_dir
         self.seed = seed
-        self.entries: List[TraceEntry] = []
+        self.trace_id = str(uuid.uuid4())
+        self.entries: List[Dict] = []
+        self.start_time = time.time()
+        os.makedirs(output_dir, exist_ok=True)
     
-    @staticmethod
-    def compute_hash(data: dict) -> str:
+    def log_decision(self, scene: Dict, instruction: Dict):
         """
-        Compute deterministic hash of JSON-serializable data.
-        
-        Uses sorted keys to ensure consistent hashing regardless
-        of dictionary key ordering.
-        """
-        json_str = json.dumps(data, sort_keys=True, default=str)
-        return hashlib.sha256(json_str.encode()).hexdigest()[:16]
-    
-    def log_decision(
-        self,
-        scene: dict,
-        lighting_instruction: dict,
-        rag_context_ids: Optional[List[dict]] = None
-    ) -> TraceEntry:
-        """
-        Log a single lighting decision.
-        
-        IMPORTANT: Data must be loaded from files, NOT generated.
+        Log a single scene → instruction decision.
         
         Args:
-            scene: Scene JSON (loaded from file, NOT generated)
-            lighting_instruction: LightingInstruction JSON (loaded from file)
-            rag_context_ids: Opaque identifiers only (document_id, chunk_id)
-                             NO content, embeddings, or scores!
-        
-        Returns:
-            TraceEntry object
+            scene: Input scene dict (from Phase 2)
+            instruction: Output lighting instruction (from Phase 4)
         """
-        refs = []
-        if rag_context_ids:
-            refs = [RAGContextRef(**ctx) for ctx in rag_context_ids]
+        scene_text = ""
+        content = scene.get("content", {})
+        if isinstance(content, dict):
+            scene_text = content.get("text", "")
+        elif isinstance(content, str):
+            scene_text = content
         
-        entry = TraceEntry(
-            run_id=self.run_id,
-            seed=self.seed,
-            scene_id=scene.get("scene_id", "unknown"),
-            timestamp=datetime.now().timestamp(),
-            input_hash=self.compute_hash(scene),
-            output_hash=self.compute_hash(lighting_instruction),
-            rag_context_ids=refs
-        )
+        entry = {
+            "scene_id": scene.get("scene_id", "unknown"),
+            "input_hash": self._hash(scene_text),
+            "output_hash": self._hash(json.dumps(instruction, sort_keys=True, default=str)),
+            "emotion": self._extract_emotion(scene),
+            "groups_used": [g.get("group_id", "") for g in instruction.get("groups", [])],
+            "timestamp": time.time(),
+        }
         self.entries.append(entry)
-        return entry
     
-    def save(self) -> Path:
-        """
-        Save trace log to JSON file.
+    def save(self) -> str:
+        """Save the trace log to a JSON file. Returns the file path."""
+        trace = {
+            "trace_id": self.trace_id,
+            "seed": self.seed,
+            "total_scenes": len(self.entries),
+            "start_time": self.start_time,
+            "end_time": time.time(),
+            "entries": self.entries,
+        }
         
-        Returns:
-            Path to saved trace file
-        """
-        trace_log = TraceLog(
-            run_id=self.run_id,
-            created_at=datetime.now().isoformat(),
-            entries=self.entries
-        )
-        output_file = self.output_dir / f"trace_{self.run_id}.json"
-        with open(output_file, 'w') as f:
-            json.dump(trace_log.model_dump(mode='json'), f, indent=2)
-        return output_file
+        filepath = os.path.join(self.output_dir, f"trace_{self.trace_id[:8]}.json")
+        with open(filepath, "w") as f:
+            json.dump(trace, f, indent=2, default=str)
+        
+        return filepath
     
-    def get_entry_count(self) -> int:
-        """Return number of logged entries."""
-        return len(self.entries)
+    def _hash(self, text: str) -> str:
+        """Generate short SHA-256 hash of text."""
+        return hashlib.sha256(text.encode()).hexdigest()[:16]
     
-    def clear(self) -> None:
-        """Clear all entries (for testing purposes)."""
-        self.entries = []
+    def _extract_emotion(self, scene: Dict) -> str:
+        """Extract primary emotion from scene dict."""
+        emotion = scene.get("emotion", {})
+        if isinstance(emotion, dict):
+            return emotion.get("primary_emotion", emotion.get("primary", "unknown"))
+        elif isinstance(emotion, str):
+            return emotion
+        return "unknown"

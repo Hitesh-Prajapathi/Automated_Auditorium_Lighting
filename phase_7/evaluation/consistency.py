@@ -1,149 +1,97 @@
 """
-Consistency metrics for evaluating LLM decision stability.
-
-Metrics defined here:
-- Jaccard similarity (group overlap)
-- Determinism score (structural matching)
-- Drift score (sequence stability)
-
-IMPORTANT: Determinism is defined STRUCTURALLY, not bytewise:
-- Same group_ids selected
-- Same transition types
-- Intensity within ε = ±0.05
+Phase 7 — Consistency Metrics
+Measures Jaccard similarity, determinism, and drift between consecutive scenes.
 """
-from typing import List, Tuple, Set
 
-# Tolerance for intensity comparison
-INTENSITY_EPSILON = 0.05
+from typing import Dict, List, Set
 
 
-def compute_jaccard_similarity(set_a: Set, set_b: Set) -> float:
+def extract_group_ids(instruction: Dict) -> Set[str]:
+    """Extract group IDs from a lighting instruction."""
+    return {g.get("group_id", "") for g in instruction.get("groups", [])}
+
+
+def compute_jaccard_similarity(set_a: Set[str], set_b: Set[str]) -> float:
     """
     Compute Jaccard similarity between two sets.
     
-    J(A, B) = |A ∩ B| / |A ∪ B|
-    
-    Args:
-        set_a: First set
-        set_b: Second set
-    
     Returns:
-        Similarity score between 0.0 and 1.0
+        float: 0.0 (no overlap) to 1.0 (identical)
     """
     if not set_a and not set_b:
         return 1.0
+    
     intersection = len(set_a & set_b)
     union = len(set_a | set_b)
+    
     return intersection / union if union > 0 else 0.0
 
 
-def compute_determinism_score(
-    instruction_a: dict,
-    instruction_b: dict,
-    epsilon: float = INTENSITY_EPSILON
-) -> Tuple[float, dict]:
+def compute_determinism_score(instructions_a: List[Dict], instructions_b: List[Dict]) -> float:
     """
-    Compute structural determinism between two LightingInstructions.
-    
-    Determinism is defined STRUCTURALLY (not bytewise):
-    - Same group_ids selected
-    - Same transition types
-    - Intensity within ε tolerance
-    
-    This definition is fair, reproducible, and defensible in papers.
-    
-    Args:
-        instruction_a: First LightingInstruction
-        instruction_b: Second LightingInstruction
-        epsilon: Intensity tolerance (default ±0.05)
+    Compute determinism: how structurally identical two runs are.
+    Compares group IDs, intensities (within epsilon), and transition types.
     
     Returns:
-        Tuple of (score 0-1, breakdown dict)
+        float: 1.0 = fully deterministic, 0.0 = completely different
     """
-    groups_a = {g["group_id"]: g for g in instruction_a.get("groups", []) if "group_id" in g}
-    groups_b = {g["group_id"]: g for g in instruction_b.get("groups", []) if "group_id" in g}
+    if len(instructions_a) != len(instructions_b):
+        return 0.0
     
-    # 1. Group ID match (Jaccard)
-    ids_a, ids_b = set(groups_a.keys()), set(groups_b.keys())
-    group_match = compute_jaccard_similarity(ids_a, ids_b)
+    epsilon = 0.01  # Intensity tolerance
+    matches = 0
+    total = 0
     
-    # 2. Parameter match for common groups
-    common_ids = ids_a & ids_b
-    param_matches = []
-    intensity_matches = []
-    transition_matches = []
-    
-    for gid in common_ids:
-        ga, gb = groups_a[gid], groups_b[gid]
+    for a, b in zip(instructions_a, instructions_b):
+        groups_a = {g.get("group_id"): g for g in a.get("groups", [])}
+        groups_b = {g.get("group_id"): g for g in b.get("groups", [])}
         
-        # Intensity check (within epsilon)
-        int_a = ga.get("parameters", {}).get("intensity", 0)
-        int_b = gb.get("parameters", {}).get("intensity", 0)
-        intensity_ok = abs(int_a - int_b) <= epsilon
-        intensity_matches.append(intensity_ok)
+        all_groups = set(groups_a.keys()) | set(groups_b.keys())
         
-        # Transition type check
-        trans_a = (ga.get("transition") or {}).get("type")
-        trans_b = (gb.get("transition") or {}).get("type")
-        transition_ok = trans_a == trans_b
-        transition_matches.append(transition_ok)
-        
-        param_matches.append(intensity_ok and transition_ok)
+        for gid in all_groups:
+            total += 1
+            ga = groups_a.get(gid, {})
+            gb = groups_b.get(gid, {})
+            
+            if not ga or not gb:
+                continue
+            
+            # Check intensity
+            ia = ga.get("parameters", {}).get("intensity", 0)
+            ib = gb.get("parameters", {}).get("intensity", 0)
+            
+            # Check transition type
+            ta = ga.get("transition", {}).get("type", "")
+            tb = gb.get("transition", {}).get("type", "")
+            
+            if abs(ia - ib) <= epsilon and ta == tb:
+                matches += 1
     
-    if param_matches:
-        param_score = sum(param_matches) / len(param_matches)
-    else:
-        # If no common groups, check if both are empty (perfect match) or disjoint (mismatch)
-        if not ids_a and not ids_b:
-            param_score = 1.0
-        else:
-            param_score = 0.0
-    
-    # Combined score (average of group match and parameter match)
-    score = (group_match + param_score) / 2
-    
-    return score, {
-        "group_match": group_match,
-        "param_score": param_score,
-        "intensity_epsilon": epsilon,
-        "common_groups": len(common_ids),
-        "intensity_matches": sum(intensity_matches),
-        "transition_matches": sum(transition_matches)
-    }
+    return matches / total if total > 0 else 1.0
 
 
-def compute_drift_score(instructions: List[dict]) -> float:
+def compute_drift_score(instructions: List[Dict]) -> float:
     """
-    Compute drift across a sequence of instructions.
+    Compute drift: average change in global intensity between consecutive scenes.
     
-    Drift measures how much lighting decisions change across
-    consecutive scenes. Lower is better (less drift = more stable).
-    
-    Args:
-        instructions: List of LightingInstruction dicts in order
+    0 = stable (intensity is exactly the same)
+    1 = chaotic (intensity swings by 100% every scene)
     
     Returns:
-        Average drift score (0.0 = no drift, 1.0 = complete change)
+        float: Drift score 0.0 to 1.0
     """
     if len(instructions) < 2:
         return 0.0
     
     drifts = []
-    for i in range(1, len(instructions)):
-        score, _ = compute_determinism_score(instructions[i-1], instructions[i])
-        drifts.append(1.0 - score)  # Drift = 1 - similarity
+    for i in range(len(instructions) - 1):
+        groups_a = instructions[i].get("groups", [])
+        avg_a = sum(g.get("parameters", {}).get("intensity", 0) for g in groups_a) / max(len(groups_a), 1)
+        
+        groups_b = instructions[i+1].get("groups", [])
+        avg_b = sum(g.get("parameters", {}).get("intensity", 0) for g in groups_b) / max(len(groups_b), 1)
+        
+        # Absolute difference in intensity (0-100), divided by 100 to get 0.0-1.0 scale
+        drifts.append(abs(avg_a - avg_b) / 100.0)
     
     return sum(drifts) / len(drifts)
-
-
-def extract_group_ids(instruction: dict) -> Set[str]:
-    """
-    Extract set of group IDs from a LightingInstruction dict.
-
-    Args:
-        instruction: LightingInstruction dict with 'groups' list
-
-    Returns:
-        Set of group_id strings
-    """
-    return {g["group_id"] for g in instruction.get("groups", []) if "group_id" in g}

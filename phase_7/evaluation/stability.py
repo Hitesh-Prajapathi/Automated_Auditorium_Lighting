@@ -1,101 +1,73 @@
 """
-Stability metrics for cross-run consistency.
-
-Measures how stable LLM decisions are when run multiple
-times with the same inputs. Important for real-world usability.
+Phase 7 — Stability Metrics
+Measures cross-run consistency for reproducibility analysis.
 """
-from typing import List
-from .consistency import compute_determinism_score
+
+import json
+import os
+import glob
+from typing import Dict, List
 
 
-def compute_cross_run_stability(
-    runs: List[List[dict]],
-    epsilon: float = 0.05
-) -> dict:
+def compute_cross_run_stability(trace_dir: str = "data/traces") -> float:
     """
-    Compute stability across multiple runs with same inputs.
+    Compare multiple trace files to measure cross-run stability.
     
-    High stability means the LLM produces consistent lighting
-    decisions across runs, which is important for production use.
+    Stability is the average determinism score across all pairs of runs.
+    A fully deterministic system (rule-based) should score 1.0.
     
     Args:
-        runs: List of runs, each run is a list of LightingInstructions.
-              All runs should have the same length (same input scenes).
-        epsilon: Intensity tolerance for comparison
-    
-    Returns:
-        Dict with stability metrics:
-        - stability_score: Average similarity across runs (0-1)
-        - num_runs: Number of runs compared
-        - epsilon: Intensity tolerance used
-    """
-    if len(runs) < 2:
-        return {
-            "stability_score": 1.0,
-            "num_runs": len(runs),
-            "epsilon": epsilon
-        }
-    
-    # Compare each run to the first (baseline)
-    baseline = runs[0]
-    scores = []
-    
-    for run in runs[1:]:
-        run_scores = []
-        for i, instr in enumerate(run):
-            if i < len(baseline):
-                score, _ = compute_determinism_score(baseline[i], instr, epsilon)
-                run_scores.append(score)
+        trace_dir: Directory containing trace JSON files
         
-        if run_scores:
-            scores.append(sum(run_scores) / len(run_scores))
-    
-    return {
-        "stability_score": sum(scores) / len(scores) if scores else 1.0,
-        "num_runs": len(runs),
-        "epsilon": epsilon
-    }
-
-
-def compute_pairwise_stability(
-    runs: List[List[dict]],
-    epsilon: float = 0.05
-) -> dict:
-    """
-    Compute pairwise stability between all run combinations.
-    
-    More thorough than baseline comparison but more expensive.
-    
-    Args:
-        runs: List of runs
-        epsilon: Intensity tolerance
-    
     Returns:
-        Dict with pairwise stability metrics
+        float: Stability score 0.0 to 1.0
     """
-    if len(runs) < 2:
-        return {
-            "pairwise_score": 1.0,
-            "num_comparisons": 0
-        }
+    trace_files = sorted(glob.glob(os.path.join(trace_dir, "trace_*.json")))
     
-    all_scores = []
-    comparisons = 0
+    if len(trace_files) < 2:
+        return 1.0  # Cannot measure with fewer than 2 runs
     
-    for i in range(len(runs)):
-        for j in range(i + 1, len(runs)):
-            run_a, run_b = runs[i], runs[j]
-            pair_scores = []
-            
-            for k in range(min(len(run_a), len(run_b))):
-                score, _ = compute_determinism_score(run_a[k], run_b[k], epsilon)
-                pair_scores.append(score)
-            
-            if pair_scores:
-                all_scores.append(sum(pair_scores) / len(pair_scores))
-                comparisons += 1
+    # Load all traces
+    traces = []
+    for tf in trace_files:
+        try:
+            with open(tf) as f:
+                traces.append(json.load(f))
+        except (json.JSONDecodeError, OSError):
+            continue
     
-    return {
-        "pairwise_score": sum(all_scores) / len(all_scores) if all_scores else 1.0,
-        "num_comparisons": comparisons
-    }
+    if len(traces) < 2:
+        return 1.0
+    
+    # Compare output hashes across runs
+    similarities = []
+    for i in range(len(traces)):
+        for j in range(i + 1, len(traces)):
+            sim = _compare_traces(traces[i], traces[j])
+            similarities.append(sim)
+    
+    return sum(similarities) / len(similarities) if similarities else 1.0
+
+
+def _compare_traces(trace_a: Dict, trace_b: Dict) -> float:
+    """Compare two traces and return similarity score."""
+    entries_a = trace_a.get("entries", [])
+    entries_b = trace_b.get("entries", [])
+    
+    if not entries_a or not entries_b:
+        return 0.0
+    
+    # Match by scene_id
+    map_a = {e["scene_id"]: e for e in entries_a}
+    map_b = {e["scene_id"]: e for e in entries_b}
+    
+    common = set(map_a.keys()) & set(map_b.keys())
+    if not common:
+        return 0.0
+    
+    matches = 0
+    for sid in common:
+        if map_a[sid].get("output_hash") == map_b[sid].get("output_hash"):
+            matches += 1
+    
+    return matches / len(common)

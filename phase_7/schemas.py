@@ -1,47 +1,43 @@
 """
-Internal trace schema for Phase 7.
-NOT a contract — used for internal validation only.
-
-This module defines pydantic models for:
-- Trace entries (individual logging records)
-- RAG context references (opaque identifiers only)
-- Complete trace logs
+Phase 7 — Pydantic Trace Schemas
+Data models for trace entries and logs.
 """
-from pydantic import BaseModel
-from typing import Optional, List
-from uuid import UUID
-from datetime import datetime
+
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional
 
 
-class RAGContextRef(BaseModel):
-    """
-    Opaque RAG reference — NO content, NO embeddings, NO scores.
-    
-    Only document_id and chunk_id are allowed for traceability.
-    """
-    document_id: str
-    chunk_id: Optional[str] = None
+@dataclass
+class RAGContextRef:
+    """Reference to RAG context used in a decision."""
+    index_name: str            # "auditorium" or "lighting_semantics"
+    query: str                 # The query used for retrieval
+    num_results: int = 0       # Number of results returned
+    context_hash: str = ""     # Hash of the context string
 
 
-class TraceEntry(BaseModel):
-    """
-    Single trace entry for a lighting decision.
-    
-    Captures input/output hashes for reproducibility
-    without storing actual content.
-    """
-    run_id: UUID
-    seed: Optional[int] = None
+@dataclass
+class TraceEntry:
+    """A single scene → instruction decision trace."""
     scene_id: str
-    timestamp: float
-    input_hash: str                              # Hash of input scene
-    output_hash: str                             # Hash of lighting instruction
-    rag_context_ids: List[RAGContextRef] = []    # Opaque refs only
-    metadata: Optional[dict] = None
+    input_hash: str            # Hash of scene text
+    output_hash: str           # Hash of instruction JSON
+    emotion: str
+    groups_used: List[str] = field(default_factory=list)
+    rag_context: Optional[RAGContextRef] = None
+    timestamp: float = 0.0
 
 
-class TraceLog(BaseModel):
-    """Collection of trace entries for a complete run."""
-    run_id: UUID
-    created_at: str
-    entries: List[TraceEntry]
+@dataclass 
+class TraceLog:
+    """Complete trace log for a pipeline run."""
+    trace_id: str
+    seed: int
+    total_scenes: int
+    start_time: float
+    end_time: float
+    entries: List[TraceEntry] = field(default_factory=list)
+    
+    @property
+    def duration_seconds(self) -> float:
+        return self.end_time - self.start_time
