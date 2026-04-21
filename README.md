@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="docs/flowcharts/master_pipeline.png" alt="Lumina Intelligence — Pipeline Architecture" width="700"/>
-</p>
-
 <h1 align="center">🎭 Lumina Intelligence — Automated Auditorium Lighting</h1>
 
 <p align="center">
