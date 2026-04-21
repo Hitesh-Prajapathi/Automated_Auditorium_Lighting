@@ -1,7 +1,7 @@
-<h1 align="center">🎭 Lumina Intelligence — Automated Auditorium Lighting</h1>
+<h1 align="center">🎭 Lumina Intelligence — Automated Auditorium Lighting using GenAI</h1>
 
 <p align="center">
-  <b>AI-powered theatrical lighting automation that transforms play scripts into production-ready DMX lighting cues</b>
+  <b>Full-Stack Generative AI System with 8-Phase Pipeline, RAG Integration, and Real-Time 3D Visualization for Automated Theatrical Lighting Production</b>
 </p>
 
 <p align="center">
